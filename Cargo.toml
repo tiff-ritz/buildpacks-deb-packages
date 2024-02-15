@@ -1,0 +1,20 @@
+[package]
+name = "buildpacks-apt"
+edition = "2021"
+rust-version = "1.76"
+
+[dependencies]
+libcnb = "=0.18.0"
+
+[dev-dependencies]
+libcnb-test = "=0.18.0"
+
+[lints.rust]
+unreachable_pub = "warn"
+unsafe_code = "warn"
+unused_crate_dependencies = "warn"
+
+[lints.clippy]
+panic_in_result_fn = "warn"
+pedantic = "warn"
+unwrap_used = "warn"
