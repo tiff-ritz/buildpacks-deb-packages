@@ -1,17 +1,38 @@
 [package]
-name = "buildpacks-apt"
+name = "buildpacks-debian-packages"
 edition = "2021"
 rust-version = "1.76"
 
+[build-dependencies]
+toml_edit = "0.22"
+
 [dependencies]
-commons = { git = "https://github.com/heroku/buildpacks-ruby", branch = "main" }
-libcnb = "=0.19.0"
-serde = "1"
+anyhow = "1"
+apt-parser = "1"
+ar = "0.9"
+async-compression = { version = "0.4", default-features = false, features = ["tokio", "gzip", "zstd", "xz"] }
+debversion = "0.4"
+futures = { version = "0.3", default-features = false, features = ["io-compat"] }
+indexmap = "2"
+libcnb = { version = "=0.22.0", features = ["trace"] }
+rayon = "1"
+reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls"] }
+reqwest-middleware = "0.3"
+reqwest-retry = "0.6"
+serde = { version = "1", features = ["derive"] }
+sequoia-openpgp = { version = "1", default-features = false, features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"] }
+sha2 = "0.10"
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "time"] }
+tokio-tar = "0.3"
+tokio-util = { version = "0.7", default-features = false, features = ["compat", "io"] }
+toml_edit = "0.22"
+walkdir = "2"
 
 [dev-dependencies]
-libcnb-test = "=0.19.0"
-indoc = "2"
-toml = "0.8"
+bon = "1"
+tempfile = "3"
+libcnb-test = "=0.22.0"
+regex = "1"
 
 [lints.rust]
 unreachable_pub = "warn"
@@ -20,6 +41,5 @@ unused_crate_dependencies = "warn"
 
 [lints.clippy]
 panic_in_result_fn = "warn"
-# The explicit priority is required due to https://github.com/rust-lang/cargo/issues/13565.
 pedantic = { level = "warn", priority = -1 }
 unwrap_used = "warn"
