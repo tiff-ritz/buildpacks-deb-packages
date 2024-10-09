@@ -30,27 +30,18 @@ use tokio::task::{JoinError, JoinSet};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 use tokio_util::io::InspectReader;
 
-use crate::create_package_index::CreatePackageIndexError::{
-    ChecksumFailed, CpuTaskFailed, CreateLayer, CreatePgpVerifier, GetPackagesRequest,
-    GetReleaseRequest, InvalidLayerName, MissingPackageIndexReleaseHash,
-    MissingSha256ReleaseHashes, NoSources, ParsePackages, ParseReleaseFile, ReadGetReleaseResponse,
-    ReadPackagesFile, ReadPgpCertificate, ReadReleaseFile, TaskFailed, WriteLayerMetadata,
-    WritePackagesLayer, WriteReleaseLayer,
-};
 use crate::debian::{
     ArchitectureName, Distro, PackageIndex, ParseRepositoryPackageError, RepositoryPackage,
     RepositoryUri, Source,
 };
 use crate::pgp::CertHelper;
-use crate::{DebianPackagesBuildpack, DebianPackagesBuildpackError};
-
-type Result<T> = std::result::Result<T, CreatePackageIndexError>;
+use crate::{BuildpackResult, DebianPackagesBuildpack, DebianPackagesBuildpackError};
 
 pub(crate) async fn create_package_index(
     context: &Arc<BuildContext<DebianPackagesBuildpack>>,
     client: &ClientWithMiddleware,
     distro: &Distro,
-) -> Result<PackageIndex> {
+) -> BuildpackResult<PackageIndex> {
     println!("## Creating package index");
     println!();
     let updated_sources = update_sources(context, client, &distro.get_source_list()).await?;
@@ -73,9 +64,9 @@ async fn update_sources(
     context: &Arc<BuildContext<DebianPackagesBuildpack>>,
     client: &ClientWithMiddleware,
     sources: &[Source],
-) -> Result<Vec<(RepositoryUri, PathBuf)>> {
+) -> BuildpackResult<Vec<(RepositoryUri, PathBuf)>> {
     if sources.is_empty() {
-        Err(NoSources)?;
+        Err(CreatePackageIndexError::NoSources)?;
     }
 
     let mut update_source_handles = JoinSet::new();
@@ -96,7 +87,9 @@ async fn update_sources(
 
     let mut updated_sources = vec![];
     while let Some(update_source_handle) = update_source_handles.join_next().await {
-        for updated_source in update_source_handle.map_err(TaskFailed)?? {
+        for updated_source in
+            update_source_handle.map_err(CreatePackageIndexError::TaskFailed)??
+        {
             updated_sources.push(updated_source);
         }
     }
@@ -112,7 +105,7 @@ async fn update_source(
     components: Vec<String>,
     arch: ArchitectureName,
     signed_by: String,
-) -> Result<Vec<(RepositoryUri, PathBuf)>> {
+) -> BuildpackResult<Vec<(RepositoryUri, PathBuf)>> {
     let release = get_release(
         context.clone(),
         client.clone(),
@@ -125,15 +118,19 @@ async fn update_source(
     let mut get_package_list_handles = JoinSet::new();
 
     for component in components {
+        let package_index = format!("{component}/binary-{arch}/Packages.gz");
         let package_index_release_hash = release
             .sha256sum
             .as_ref()
-            .ok_or(MissingSha256ReleaseHashes)?
+            .ok_or(CreatePackageIndexError::MissingSha256ReleaseHashes(
+                uri.clone(),
+            ))?
             .iter()
-            .find(|release_hash| {
-                release_hash.filename == format!("{component}/binary-{arch}/Packages.gz")
-            })
-            .ok_or(MissingPackageIndexReleaseHash)?;
+            .find(|release_hash| release_hash.filename == package_index)
+            .ok_or(CreatePackageIndexError::MissingPackageIndexReleaseHash(
+                uri.clone(),
+                package_index,
+            ))?;
 
         let package_release_url = if release.acquire_by_hash.unwrap_or_default() {
             format!(
@@ -158,7 +155,10 @@ async fn update_source(
 
     let mut results = vec![];
     while let Some(get_package_list_handle) = get_package_list_handles.join_next().await {
-        results.push((uri.clone(), get_package_list_handle.map_err(TaskFailed)??));
+        results.push((
+            uri.clone(),
+            get_package_list_handle.map_err(CreatePackageIndexError::TaskFailed)??,
+        ));
     }
     Ok(results)
 }
@@ -169,7 +169,7 @@ async fn get_release(
     uri: RepositoryUri,
     suite: String,
     signed_by: String,
-) -> Result<Release> {
+) -> BuildpackResult<Release> {
     let release_url = format!("{}/dists/{suite}/InRelease", uri.as_str());
 
     let response = client
@@ -177,12 +177,12 @@ async fn get_release(
         .send()
         .await
         .and_then(|res| res.error_for_status().map_err(Reqwest))
-        .map_err(GetReleaseRequest)?;
+        .map_err(CreatePackageIndexError::GetReleaseRequest)?;
 
     // it would be nice to use the url as the layer name but urls don't make for good file names
     // so instead we'll convert the url to a sha256 hex value
     let layer_name = LayerName::from_str(&format!("{:x}", Sha256::digest(&release_url)))
-        .map_err(InvalidLayerName)?;
+        .map_err(|e| CreatePackageIndexError::InvalidLayerName(release_url.clone(), e))?;
 
     let new_metadata = ReleaseFileMetadata {
         etag: response.headers().get(ETAG).and_then(|header_value| {
@@ -194,23 +194,21 @@ async fn get_release(
         }),
     };
 
-    let release_file_layer = context
-        .cached_layer(
-            layer_name,
-            CachedLayerDefinition {
-                build: true,
-                launch: false,
-                restored_layer_action: &|old_metadata: &ReleaseFileMetadata, _| {
-                    if old_metadata == &new_metadata {
-                        RestoredLayerAction::KeepLayer
-                    } else {
-                        RestoredLayerAction::DeleteLayer
-                    }
-                },
-                invalid_metadata_action: &|_| InvalidMetadataAction::DeleteLayer,
+    let release_file_layer = context.cached_layer(
+        layer_name,
+        CachedLayerDefinition {
+            build: true,
+            launch: false,
+            restored_layer_action: &|old_metadata: &ReleaseFileMetadata, _| {
+                if old_metadata == &new_metadata {
+                    RestoredLayerAction::KeepLayer
+                } else {
+                    RestoredLayerAction::DeleteLayer
+                }
             },
-        )
-        .map_err(|e| CreateLayer(Box::new(e)))?;
+            invalid_metadata_action: &|_| InvalidMetadataAction::DeleteLayer,
+        },
+    )?;
 
     let release_file_path = release_file_layer.path().join("release");
 
@@ -219,49 +217,56 @@ async fn get_release(
             println!("  [CACHED] {url}", url = &release_url);
         }
         LayerState::Empty { .. } => {
-            release_file_layer
-                .write_metadata(new_metadata)
-                .map_err(|e| WriteLayerMetadata(Box::new(e)))?;
+            release_file_layer.write_metadata(new_metadata)?;
 
-            async_write(release_file_layer.path().join(".url"), &release_url)
+            let raw_release_url_path = release_file_layer.path().join(".url");
+            async_write(&raw_release_url_path, &release_url)
                 .await
-                .map_err(WriteReleaseLayer)?;
+                .map_err(|e| CreatePackageIndexError::WriteReleaseLayer(raw_release_url_path, e))?;
 
             println!("  [GET] {url}", url = &release_url);
 
-            let unverified_response_body = response.text().await.map_err(ReadGetReleaseResponse)?;
+            let unverified_response_body = response
+                .text()
+                .await
+                .map_err(CreatePackageIndexError::ReadGetReleaseResponse)?;
 
             // GPG verification
             let policy = StandardPolicy::new();
             let cert_helper = Cert::from_str(&signed_by)
-                .map_err(ReadPgpCertificate)
+                .map_err(CreatePackageIndexError::CreatePgpCertificate)
                 .map(CertHelper::new)?;
 
             let mut reader = FuturesAsyncReadCompatExt::compat(AllowStdIo::new(
                 VerifierBuilder::from_bytes(&unverified_response_body)
-                    .map_err(CreatePgpVerifier)
+                    .map_err(CreatePackageIndexError::CreatePgpVerifier)
                     .and_then(|verifier_builder| {
                         verifier_builder
                             .with_policy(&policy, None, cert_helper)
-                            .map_err(CreatePgpVerifier)
+                            .map_err(CreatePackageIndexError::CreatePgpVerifier)
                     })?,
             ));
 
             let mut writer = AsyncFile::create(&release_file_path)
                 .await
-                .map_err(WriteReleaseLayer)
+                .map_err(|e| {
+                    CreatePackageIndexError::WriteReleaseLayer(release_file_path.clone(), e)
+                })
                 .map(AsyncBufWriter::new)?;
 
-            async_copy(&mut reader, &mut writer)
-                .await
-                .map_err(WriteReleaseLayer)?;
+            async_copy(&mut reader, &mut writer).await.map_err(|e| {
+                CreatePackageIndexError::WriteReleaseLayer(release_file_path.clone(), e)
+            })?;
         }
     };
 
-    async_read_to_string(&release_file_path)
+    Ok(async_read_to_string(&release_file_path)
         .await
-        .map_err(ReadReleaseFile)
-        .and_then(|release_data| Release::from(&release_data).map_err(ParseReleaseFile))
+        .map_err(|e| CreatePackageIndexError::ReadReleaseFile(release_file_path.clone(), e))
+        .and_then(|release_data| {
+            Release::from(&release_data)
+                .map_err(|e| CreatePackageIndexError::ParseReleaseFile(release_file_path, e))
+        })?)
 }
 
 async fn get_package_list(
@@ -269,33 +274,31 @@ async fn get_package_list(
     client: ClientWithMiddleware,
     package_release_url: String,
     hash: String,
-) -> Result<PathBuf> {
+) -> BuildpackResult<PathBuf> {
     // it would be nice to use the url as the layer name but urls don't make for good file names
     // so instead we'll convert the url to a sha256 hex value
     let layer_name = LayerName::from_str(&format!("{:x}", Sha256::digest(&package_release_url)))
-        .map_err(InvalidLayerName)?;
+        .map_err(|e| CreatePackageIndexError::InvalidLayerName(package_release_url.clone(), e))?;
 
     let new_metadata = PackageIndexMetadata {
         hash: hash.to_string(),
     };
 
-    let package_index_layer = context
-        .cached_layer(
-            layer_name,
-            CachedLayerDefinition {
-                build: true,
-                launch: false,
-                restored_layer_action: &|old_metadata: &PackageIndexMetadata, _| {
-                    if old_metadata == &new_metadata {
-                        RestoredLayerAction::KeepLayer
-                    } else {
-                        RestoredLayerAction::DeleteLayer
-                    }
-                },
-                invalid_metadata_action: &|_| InvalidMetadataAction::DeleteLayer,
+    let package_index_layer = context.cached_layer(
+        layer_name,
+        CachedLayerDefinition {
+            build: true,
+            launch: false,
+            restored_layer_action: &|old_metadata: &PackageIndexMetadata, _| {
+                if old_metadata == &new_metadata {
+                    RestoredLayerAction::KeepLayer
+                } else {
+                    RestoredLayerAction::DeleteLayer
+                }
             },
-        )
-        .map_err(|e| CreateLayer(Box::new(e)))?;
+            invalid_metadata_action: &|_| InvalidMetadataAction::DeleteLayer,
+        },
+    )?;
 
     let package_index_path = package_index_layer.path().join("package_index");
 
@@ -306,23 +309,21 @@ async fn get_package_list(
         LayerState::Empty { .. } => {
             println!("  [GET] {url}", url = &package_release_url);
 
-            package_index_layer
-                .write_metadata(new_metadata)
-                .map_err(|e| WriteLayerMetadata(Box::new(e)))?;
+            package_index_layer.write_metadata(new_metadata)?;
 
-            async_write(
-                package_index_layer.path().join(".url"),
-                &package_release_url,
-            )
-            .await
-            .map_err(WritePackagesLayer)?;
+            let package_index_url_path = package_index_layer.path().join(".url");
+            async_write(&package_index_url_path, &package_release_url)
+                .await
+                .map_err(|e| {
+                    CreatePackageIndexError::WritePackagesLayer(package_index_url_path, e)
+                })?;
 
             let response = client
                 .get(&package_release_url)
                 .send()
                 .await
                 .and_then(|res| res.error_for_status().map_err(Reqwest))
-                .map_err(GetPackagesRequest)?;
+                .map_err(CreatePackageIndexError::GetPackagesRequest)?;
 
             let mut hasher = Sha256::new();
 
@@ -343,17 +344,26 @@ async fn get_package_list(
 
             let mut writer = AsyncFile::create(&package_index_path)
                 .await
-                .map_err(WritePackagesLayer)
+                .map_err(|e| {
+                    CreatePackageIndexError::WritePackagesLayer(package_index_path.clone(), e)
+                })
                 .map(AsyncBufWriter::new)?;
 
-            async_copy(&mut reader, &mut writer)
-                .await
-                .map_err(WritePackagesLayer)?;
+            async_copy(&mut reader, &mut writer).await.map_err(|e| {
+                CreatePackageIndexError::WritePackageIndexFromResponse(
+                    package_index_path.clone(),
+                    e,
+                )
+            })?;
 
             let calculated_hash = format!("{:x}", hasher.finalize());
 
             if hash != calculated_hash {
-                Err(ChecksumFailed(package_release_url, hash, calculated_hash))?;
+                Err(CreatePackageIndexError::ChecksumFailed {
+                    url: package_release_url,
+                    expected: hash,
+                    actual: calculated_hash,
+                })?;
             }
         }
     };
@@ -363,7 +373,7 @@ async fn get_package_list(
 
 async fn build_package_index(
     updated_sources: Vec<(RepositoryUri, PathBuf)>,
-) -> Result<PackageIndex> {
+) -> BuildpackResult<PackageIndex> {
     let mut get_packages_handles = JoinSet::new();
     for (repository, package_index_path) in updated_sources {
         get_packages_handles.spawn(read_packages(repository, package_index_path));
@@ -371,7 +381,7 @@ async fn build_package_index(
 
     let mut package_index = PackageIndex::default();
     while let Some(get_package_handle) = get_packages_handles.join_next().await {
-        let packages = get_package_handle.map_err(TaskFailed)??;
+        let packages = get_package_handle.map_err(CreatePackageIndexError::TaskFailed)??;
         for package in packages {
             package_index.add_package(package);
         }
@@ -385,10 +395,10 @@ async fn build_package_index(
 async fn read_packages(
     repository_uri: RepositoryUri,
     package_index_path: PathBuf,
-) -> Result<Vec<RepositoryPackage>> {
+) -> BuildpackResult<Vec<RepositoryPackage>> {
     let contents = async_read_to_string(&package_index_path)
         .await
-        .map_err(ReadPackagesFile)?
+        .map_err(|e| CreatePackageIndexError::ReadPackagesFile(package_index_path.clone(), e))?
         .replace("\r\n", "\n")
         .replace('\0', "");
 
@@ -405,37 +415,45 @@ async fn read_packages(
             });
         let _ = send.send((packages, errors));
     });
-    let (packages, errors) = recv.await.map_err(CpuTaskFailed)?;
+    let (packages, errors) = recv.await.map_err(CreatePackageIndexError::CpuTaskFailed)?;
     if errors.is_empty() {
         Ok(packages)
     } else {
-        Err(ParsePackages(errors))
+        Err(CreatePackageIndexError::ParsePackages(package_index_path, errors).into())
     }
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub(crate) enum CreatePackageIndexError {
     NoSources,
     TaskFailed(JoinError),
-    InvalidLayerName(LayerNameError),
-    CreateLayer(Box<libcnb::Error<DebianPackagesBuildpackError>>),
-    WriteLayerMetadata(Box<libcnb::Error<DebianPackagesBuildpackError>>),
+    InvalidLayerName(String, LayerNameError),
     GetReleaseRequest(reqwest_middleware::Error),
     ReadGetReleaseResponse(reqwest::Error),
-    ReadPgpCertificate(anyhow::Error),
+    CreatePgpCertificate(anyhow::Error),
     CreatePgpVerifier(anyhow::Error),
-    WriteReleaseLayer(std::io::Error),
-    ReadReleaseFile(std::io::Error),
-    ParseReleaseFile(APTError),
-    MissingSha256ReleaseHashes,
-    MissingPackageIndexReleaseHash,
+    WriteReleaseLayer(PathBuf, std::io::Error),
+    ReadReleaseFile(PathBuf, std::io::Error),
+    ParseReleaseFile(PathBuf, APTError),
+    MissingSha256ReleaseHashes(RepositoryUri),
+    MissingPackageIndexReleaseHash(RepositoryUri, String),
     GetPackagesRequest(reqwest_middleware::Error),
-    WritePackagesLayer(std::io::Error),
-    ChecksumFailed(String, String, String),
+    WritePackagesLayer(PathBuf, std::io::Error),
+    WritePackageIndexFromResponse(PathBuf, std::io::Error),
+    ChecksumFailed {
+        url: String,
+        expected: String,
+        actual: String,
+    },
     CpuTaskFailed(RecvError),
-    ReadPackagesFile(std::io::Error),
-    ParsePackages(Vec<ParseRepositoryPackageError>),
+    ReadPackagesFile(PathBuf, std::io::Error),
+    ParsePackages(PathBuf, Vec<ParseRepositoryPackageError>),
+}
+
+impl From<CreatePackageIndexError> for libcnb::Error<DebianPackagesBuildpackError> {
+    fn from(value: CreatePackageIndexError) -> Self {
+        Self::BuildpackError(DebianPackagesBuildpackError::CreatePackageIndex(value))
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
