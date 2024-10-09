@@ -1,12 +1,12 @@
 api = "0.10"
 
 [buildpack]
-id = "heroku/debian-packages"
+id = "heroku/deb-packages"
 version = "0.0.1"
-name = "Heroku Debian Packages Buildpack"
-description = "Heroku's buildpack for installing Debian packages."
-homepage = "https://github.com/heroku/buildpacks-debian-packages"
-keywords = ["debian", "packages"]
+name = "Heroku .deb Packages Buildpack"
+description = "Heroku's buildpack for installing .deb system packages."
+homepage = "https://github.com/heroku/buildpacks-deb-packages"
+keywords = ["deb", "debian", "packages"]
 
 [[buildpack.licenses]]
 type = "Apache-2.0"
@@ -27,4 +27,4 @@ distros = [
 ]
 
 [metadata.release]
-image = { repository = "docker.io/heroku/buildpacks-debian-packages" }
+image = { repository = "docker.io/heroku/buildpacks-deb-packages" }
