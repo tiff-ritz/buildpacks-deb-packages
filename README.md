@@ -64,7 +64,7 @@ install = [
     # string version of a dependency to install
     "package-name",
     # inline-table version of a dependency to install
-    { name = "package-name", skip_dependencies = true }
+    { name = "package-name", skip_dependencies = true, force = true }
 ]
 ```
 
@@ -92,6 +92,10 @@ install = [
             - `skip_dependencies` *__([boolean][toml-boolean], optional, default = false)__*
 
               If set to `true`, no attempt will be made to install any dependencies of the given package.
+
+            - `force` *__([boolean][toml-boolean], optional, default = false)__*
+
+              If set to `true`, the package will be installed even if it's already installed on the system.
 
 > [!TIP]
 > Users of the [heroku-community/apt][classic-apt-buildpack] can migrate their Aptfile to the above configuration by
@@ -155,6 +159,9 @@ building the list of packages involves:
 For each package requested for install declared in the [buildpack configuration](#configuration):
 
 - Lookup the [Binary Package][debian-binary-package] in the [Package Index](#step-1-build-the-package-index).
+- Check if the requested package is already installed on the system
+    - If it is already installed and the requested package is configured with `force = false`
+        - Skip the package
 - If the requested package is configured with `skip_dependencies = false`:
     - Add the latest version of the requested package.
     - Read the dependencies listed in the [Depends][binary-dependency-fields]
