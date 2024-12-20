@@ -37,6 +37,7 @@ libcnb-test = "=0.26.0"
 regex = "1"
 strip-ansi-escapes = "0.2"
 tempfile = "3"
+buildpacks-deb-packages = { path = "." }
 
 [lints.rust]
 unreachable_pub = "warn"

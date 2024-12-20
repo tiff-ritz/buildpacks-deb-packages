@@ -51,6 +51,12 @@ The configuration for this buildpack must be added to the project descriptor fil
 project using the `com.heroku.buildpacks.deb-packages` table. The list of packages to install must be
 specified there. See below for the [configuration schema](#schema) and an [example](#example).
 
+### Configuring Environment Variables
+
+You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.
+
+During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual paths so the variables are available at both `build` and `launch` phases using [layer environment variables][cnb-environment].
+
 #### Example
 
 ```toml
@@ -62,9 +68,18 @@ schema-version = "0.2"
 [com.heroku.buildpacks.deb-packages]
 install = [
     # string version of a dependency to install
-    "package-name",
+    system-cron,
     # inline-table version of a dependency to install
-    { name = "package-name", skip_dependencies = true, force = true }
+    { name = "git", 
+      env = { "GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", 
+              "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates" }
+    },
+    { name = "babeld" },
+    { name = "ghostscript",
+      skip_dependencies = true,
+      force = true,
+      env = { "GS_LIB" = "{install_dir}/var/lib/ghostscript" }
+    },
 ]
 ```
 
@@ -96,6 +111,10 @@ install = [
             - `force` *__([boolean][toml-boolean], optional, default = false)__*
 
               If set to `true`, the package will be installed even if it's already installed on the system.
+
+            - `env` *__([inline-table][toml-inline-table], optional, default={})__*
+
+              A table of environment variables to set for the package. The keys are the variable names and the values are the variable values. The `{build_dir}` placeholder can be used in the values and will be replaced with the actual build directory path.
 
 > [!TIP]
 > Users of the [heroku-community/apt][classic-apt-buildpack] can migrate their Aptfile to the above configuration by
@@ -199,6 +218,7 @@ For each package added after [determining the packages to install](#step-2-deter
 | `INCLUDE_PATH`       | `/<layer_dir>/usr/include/<arch>` <br> `/<layer_dir>/usr/include`                                                | header files     |
 | `CPATH`              | Same as `INCLUDE_PATH`                                                                                           | header files     |
 | `CPPPATH`            | Same as `INCLUDE_PATH`                                                                                           | header files     |
+
 | `PKG_CONFIG_PATH`    | `/<layer_dir>/usr/lib/<arch>/pkgconfig` <br> `/<layer_dir>/usr/lib/pkgconfig`                                    | pc files         |
 
 ## Contributing
