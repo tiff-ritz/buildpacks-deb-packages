@@ -134,6 +134,7 @@ pub(crate) async fn install_packages(
         }
     }
 
+    // Configure the environment variables for the installed layer
     let layer_env = configure_layer_environment(
         &install_layer.path(),
         &MultiarchName::from(&distro.architecture),
@@ -313,6 +314,7 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
     Ok(())
 }
 
+// Modified function to include setting GIT_EXEC_PATH
 fn configure_layer_environment(install_path: &Path, multiarch_name: &MultiarchName) -> LayerEnv {
     let mut layer_env = LayerEnv::new();
 
@@ -323,8 +325,16 @@ fn configure_layer_environment(install_path: &Path, multiarch_name: &MultiarchNa
     ];
     prepend_to_env_var(&mut layer_env, "PATH", &bin_paths);
 
+    // Set GIT_EXEC_PATH
+    let git_exec_path = install_path.join("usr/lib/git-core");
+    layer_env.insert(
+        Scope::All,
+        ModificationBehavior::Override,
+        "GIT_EXEC_PATH",
+        git_exec_path.to_string_lossy().to_string(),
+    );
+
     // support multi-arch and legacy filesystem layouts for debian packages
-    // https://wiki.ubuntu.com/MultiarchSpec
     let library_paths = [
         install_path.join(format!("usr/lib/{multiarch_name}")),
         install_path.join("usr/lib"),
