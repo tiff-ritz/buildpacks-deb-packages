@@ -304,6 +304,7 @@ dependencies = [
  "ar",
  "async-compression",
  "bon",
+ "buildpacks-deb-packages",
  "bullet_stream",
  "debversion",
  "edit-distance",
