@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use std::env::temp_dir;
 use std::ffi::OsString;
+use std::fs;
 use std::fs::File;
 use std::io::{ErrorKind, Stdout, Write};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use toml_edit::DocumentMut;
 
 use ar::Archive as ArArchive;
 use async_compression::tokio::bufread::{GzipDecoder, XzDecoder, ZstdDecoder};
@@ -325,14 +327,33 @@ fn configure_layer_environment(install_path: &Path, multiarch_name: &MultiarchNa
     ];
     prepend_to_env_var(&mut layer_env, "PATH", &bin_paths);
 
-    // Set GIT_EXEC_PATH
-    let git_exec_path = install_path.join("usr/lib/git-core");
-    layer_env.insert(
-        Scope::All,
-        ModificationBehavior::Override,
-        "GIT_EXEC_PATH",
-        git_exec_path.to_string_lossy().to_string(),
-    );
+    // Check if git or ghostscript is in project.toml and set GS_LIB
+    let project_toml_path = install_path.join("project.toml");
+    if project_toml_path.exists() {
+        let contents = fs::read_to_string(project_toml_path).unwrap();
+        let doc = contents.parse::<DocumentMut>().unwrap();
+
+        if doc.get("git").is_some() {
+            // Set GIT_EXEC_PATH
+            let git_exec_path = install_path.join("usr/lib/git-core");
+            layer_env.insert(
+                Scope::All,
+                ModificationBehavior::Override,
+                "GIT_EXEC_PATH",
+                git_exec_path.to_string_lossy().to_string(),
+            );
+        }
+
+        if doc.get("ghostscript").is_some() {
+            let gs_lib_path = install_path.join("var/lib/ghostscript");
+            layer_env.insert(
+                Scope::All,
+                ModificationBehavior::Override,
+                "GS_LIB",
+                gs_lib_path.to_string_lossy().to_string(),
+            );
+        }
+    }
 
     // support multi-arch and legacy filesystem layouts for debian packages
     let library_paths = [
@@ -620,17 +641,41 @@ mod unit_tests {
     use crate::install_packages::configure_layer_environment;
     use crate::debian::MultiarchName;
     use std::str::FromStr;
+    use std::fs;
 
     #[test]
     fn test_configure_layer_environment_sets_git_exec_path() {
-        let install_path = PathBuf::from("/mock/install/path");
+        let temp_dir = tempfile::tempdir().unwrap();
+        let install_path = temp_dir.path();
+        let project_toml_path = install_path.join("project.toml");
+
+        // Copy project.toml from fixtures
+        fs::copy("tests/fixtures/unit_tests/project.toml", &project_toml_path).unwrap();
+
         let multiarch_name = MultiarchName::from_str("x86_64-linux-gnu").unwrap();
         let layer_env = configure_layer_environment(&install_path, &multiarch_name);
 
         assert_eq!(
             layer_env.apply_to_empty(Scope::All).get("GIT_EXEC_PATH").map(|s| s.to_string_lossy().into_owned()),
-            // layer_env.apply_to_empty(Scope::All).get("GIT_EXEC_PATH"),
-            Some("/mock/install/path/usr/lib/git-core".to_string())
+            Some(install_path.join("usr/lib/git-core").to_string_lossy().to_string())
         );
-    }    
+    }
+
+    #[test]
+    fn test_configure_layer_environment_sets_gs_lib() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let install_path = temp_dir.path();
+        let project_toml_path = install_path.join("project.toml");
+
+        // Copy project.toml from fixtures
+        fs::copy("tests/fixtures/unit_tests/project.toml", &project_toml_path).unwrap();
+
+        let multiarch_name = MultiarchName::from_str("x86_64-linux-gnu").unwrap();
+        let layer_env = configure_layer_environment(&install_path, &multiarch_name);
+
+        assert_eq!(
+            layer_env.apply_to_empty(Scope::All).get("GS_LIB").map(|s| s.to_string_lossy().into_owned()),
+            Some(install_path.join("var/lib/ghostscript").to_string_lossy().to_string())
+        );
+    }
 }
