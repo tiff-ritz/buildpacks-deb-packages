@@ -1,2 +1,9 @@
-git = true
-ghostscript = true
+[_]
+schema-version = "0.2"
+
+[com.heroku.buildpacks.deb-packages]
+install = [
+    { name = "git", env = { "GIT_EXEC_PATH" = "{build_dir}/usr/lib/git-core" } },
+    { name = "babeld" },
+    { name = "ghostscript", skip_dependencies = true, force = true, env = { "GS_LIB" = "{build_dir}/var/lib/ghostscript" } },
+]
