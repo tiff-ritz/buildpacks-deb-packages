@@ -55,7 +55,9 @@ specified there. See below for the [configuration schema](#schema) and an [examp
 
 You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.
 
-#### Example `project.toml`
+During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual installation directory at the end of the build.
+
+#### Example
 
 ```toml
 schema-version = "0.2"
@@ -74,14 +76,6 @@ install = [
     },
 ]
 ```
-
-In this example:
-
-There are 3 packages to install.  The `git` package has two environment variables defined: `GIT_EXEC_PATH` and `GIT_TEMPLATE_DIR`.  The `ghostscript` package has one environment variable defined: `GS_LIB`.
-
-#### Applying Environment Variables
-
-During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual installation directory at the end of the build.
 
 #### Schema
 
