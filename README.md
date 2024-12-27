@@ -51,22 +51,37 @@ The configuration for this buildpack must be added to the project descriptor fil
 project using the `com.heroku.buildpacks.deb-packages` table. The list of packages to install must be
 specified there. See below for the [configuration schema](#schema) and an [example](#example).
 
-#### Example
+### Configuring Environment Variables
+
+You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.
+
+#### Example `project.toml`
 
 ```toml
-# _.schema-version is required for the project descriptor
-[_]
 schema-version = "0.2"
 
-# buildpack configuration goes here
 [com.heroku.buildpacks.deb-packages]
 install = [
-    # string version of a dependency to install
-    "package-name",
-    # inline-table version of a dependency to install
-    { name = "package-name", skip_dependencies = true, force = true }
+    { name = "git", 
+      env = { "GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", 
+              "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates" }
+    },
+    { name = "babeld" },
+    { name = "ghostscript",
+      skip_dependencies = true,
+      force = true,
+      env = { "GS_LIB" = "{install_dir}/var/lib/ghostscript" }
+    },
 ]
 ```
+
+In this example:
+
+There are 3 packages to install.  The `git` package has two environment variables defined: `GIT_EXEC_PATH` and `GIT_TEMPLATE_DIR`.  The `ghostscript` package has one environment variable defined: `GS_LIB`.
+
+#### Applying Environment Variables
+
+During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual installation directory at the end of the build.
 
 #### Schema
 
@@ -96,6 +111,10 @@ install = [
             - `force` *__([boolean][toml-boolean], optional, default = false)__*
 
               If set to `true`, the package will be installed even if it's already installed on the system.
+
+            - `env` *__([inline-table][toml-inline-table], optional, default={})__*
+
+              A table of environment variables to set for the package. The keys are the variable names and the values are the variable values. The `{build_dir}` placeholder can be used in the values and will be replaced with the actual build directory path.
 
 > [!TIP]
 > Users of the [heroku-community/apt][classic-apt-buildpack] can migrate their Aptfile to the above configuration by
@@ -153,39 +172,6 @@ building the list of packages involves:
 - Building an index of [Package Name][package-name-field] → ([Repository URI][debian-repository-uri],
   [Binary Package][debian-binary-package]) entries that can be used to lookup information about any packages requested
   for install.
-
-### Configuring Environment Variables
-
-You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.
-
-#### Example `project.toml`
-
-```toml
-schema-version = "0.2"
-
-[com.heroku.buildpacks.deb-packages]
-install = [
-    { name = "git", 
-      env = { "GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", 
-              "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates" }
-    },
-    { name = "babeld" },
-    { name = "ghostscript",
-      skip_dependencies = true,
-      force = true,
-      env = { "GS_LIB" = "{install_dir}/var/lib/ghostscript" }
-    },
-]
-```
-
-In this example:
-
-The `git` package has two environment variables defined: `GIT_EXEC_PATH` and `GIT_TEMPLATE_DIR`.
-The `ghostscript` package has one environment variable defined: `GS_LIB`.
-
-#### Applying Environment Variables
-
-During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual installation directory at the end of the build.
 
 #### Step 2: Determine the packages to install
 
