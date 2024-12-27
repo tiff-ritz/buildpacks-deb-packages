@@ -154,6 +154,39 @@ building the list of packages involves:
   [Binary Package][debian-binary-package]) entries that can be used to lookup information about any packages requested
   for install.
 
+### Configuring Environment Variables
+
+You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.
+
+#### Example `project.toml`
+
+```toml
+schema-version = "0.2"
+
+[com.heroku.buildpacks.deb-packages]
+install = [
+    { name = "git", 
+      env = { "GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", 
+              "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates" }
+    },
+    { name = "babeld" },
+    { name = "ghostscript",
+      skip_dependencies = true,
+      force = true,
+      env = { "GS_LIB" = "{install_dir}/var/lib/ghostscript" }
+    },
+]
+```
+
+In this example:
+
+The `git` package has two environment variables defined: `GIT_EXEC_PATH` and `GIT_TEMPLATE_DIR`.
+The `ghostscript` package has one environment variable defined: `GS_LIB`.
+
+#### Applying Environment Variables
+
+During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual installation directory at the end of the build.
+
 #### Step 2: Determine the packages to install
 
 For each package requested for install declared in the [buildpack configuration](#configuration):
@@ -201,7 +234,7 @@ For each package added after [determining the packages to install](#step-2-deter
 | `CPPPATH`            | Same as `INCLUDE_PATH`                                                                                           | header files     |
 
 | `PKG_CONFIG_PATH`    | `/<layer_dir>/usr/lib/<arch>/pkgconfig` <br> `/<layer_dir>/usr/lib/pkgconfig`                                    | pc files         |
-| `GIT_EXEC_PATH`    | `/<layer_dir>/app/.apt/usr/lib/git-core`                                    | git files         |
+
 ## Contributing
 
 Issues and pull requests are welcome. See our [contributing guidelines](./CONTRIBUTING.md) if you would like to help.

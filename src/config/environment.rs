@@ -10,7 +10,7 @@ pub(crate) struct Environment {
 
 impl Environment {
     /// Load environment variables from the project.toml file based on package names.
-    pub(crate) fn load_from_toml(file_path: &Path, build_dir: &str) -> Self {
+    pub(crate) fn load_from_toml(file_path: &Path, install_dir: &str) -> Self {
         let mut env = Environment::default();
         if let Ok(contents) = fs::read_to_string(file_path) {
             let doc = contents.parse::<DocumentMut>().unwrap();
@@ -31,8 +31,8 @@ impl Environment {
                     {
                         for (key, value) in env_table.iter() {
                             if let Some(value_str) = value.as_str() {
-                                let value_with_build_dir = value_str.replace("{build_dir}", build_dir);
-                                env.variables.insert(key.to_string(), value_with_build_dir);
+                                let value_with_install_dir = value_str.replace("{install_dir}", install_dir);
+                                env.variables.insert(key.to_string(), value_with_install_dir);
                             }
                         }
                     }
@@ -71,9 +71,9 @@ mod tests {
 
             [com.heroku.buildpacks.deb-packages]
             install = [
-                { name = "git", env = { "GIT_EXEC_PATH" = "{build_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{build_dir}/usr/lib/git-core/templates" } },
+                { name = "git", env = { "GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/lib/git-core/templates" } },
                 { name = "babeld" },
-                { name = "ghostscript", skip_dependencies = true, force = true, env = { "GS_LIB" = "{build_dir}/var/lib/ghostscript", "GS_FONTPATH" = "{build_dir}/var/lib/ghostscript/fonts" } },
+                { name = "ghostscript", skip_dependencies = true, force = true, env = { "GS_LIB" = "{install_dir}/var/lib/ghostscript", "GS_FONTPATH" = "{install_dir}/var/lib/ghostscript/fonts" } },
             ]
         "#;
 

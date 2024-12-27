@@ -336,12 +336,7 @@ fn configure_layer_environment(install_path: &Path, multiarch_name: &MultiarchNa
     if project_toml_path.exists() {
         let env = Environment::load_from_toml(&project_toml_path, &install_path.to_string_lossy());
         for (key, value) in env.get_variables() {
-            layer_env.insert(
-                Scope::All,
-                ModificationBehavior::Override,
-                key,
-                value.clone(),
-            );
+            prepend_to_env_var(&mut layer_env, key, vec![value.clone()]);
         }
     }
 
