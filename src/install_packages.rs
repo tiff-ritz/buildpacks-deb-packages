@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 use std::env::temp_dir;
 use std::ffi::OsString;
-// use std::fs;
 use std::fs::File;
 use std::io::{ErrorKind, Stdout, Write};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-// use toml_edit::DocumentMut;
 
 use ar::Archive as ArArchive;
 use async_compression::tokio::bufread::{GzipDecoder, XzDecoder, ZstdDecoder};
@@ -625,50 +623,3 @@ mod test {
             .unwrap_or_default()
     }
 }
-
-/* #[cfg(test)]
-mod unit_tests {
-    use std::path::PathBuf;
-    use libcnb::layer_env::Scope;
-    use crate::install_packages::configure_layer_environment;
-    use crate::debian::MultiarchName;
-    use std::str::FromStr;
-    use std::fs; */
-
-/*     #[test]
-    fn test_configure_layer_environment_sets_git_exec_path() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let install_path = temp_dir.path();
-        let project_toml_path = install_path.join("project.toml");
-
-        // Copy project.toml from fixtures
-        fs::copy("tests/fixtures/unit_tests/project.toml", &project_toml_path).unwrap();
-
-        let multiarch_name = MultiarchName::from_str("x86_64-linux-gnu").unwrap();
-        let layer_env = configure_layer_environment(&install_path, &multiarch_name);
-
-        assert_eq!(
-            layer_env.apply_to_empty(Scope::All).get("GIT_EXEC_PATH").map(|s| s.to_string_lossy().into_owned()),
-            Some(install_path.join("usr/lib/git-core").to_string_lossy().to_string())
-        );
-    }
-
-    #[test]
-    fn test_configure_layer_environment_sets_gs_lib() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let install_path = temp_dir.path();
-        let project_toml_path = install_path.join("project.toml");
-
-        // Copy project.toml from fixtures
-        fs::copy("tests/fixtures/unit_tests/project.toml", &project_toml_path).unwrap();
-
-        let multiarch_name = MultiarchName::from_str("x86_64-linux-gnu").unwrap();
-        let layer_env = configure_layer_environment(&install_path, &multiarch_name);
-
-        assert_eq!(
-            layer_env.apply_to_empty(Scope::All).get("GS_LIB").map(|s| s.to_string_lossy().into_owned()),
-            Some(install_path.join("var/lib/ghostscript").to_string_lossy().to_string())
-        );
-    }
-}
-*/

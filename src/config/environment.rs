@@ -86,10 +86,10 @@ mod tests {
         let variables = env.get_variables();
 
         // Print the values of the variables
-        println!("GIT_EXEC_PATH: {:?}", variables.get("GIT_EXEC_PATH"));
-        println!("GIT_TEMPLATE_DIR: {:?}", variables.get("GIT_TEMPLATE_DIR"));
-        println!("GS_LIB: {:?}", variables.get("GS_LIB"));
-        println!("GS_FONTPATH: {:?}", variables.get("GS_FONTPATH"));
+        // println!("GIT_EXEC_PATH: {:?}", variables.get("GIT_EXEC_PATH"));
+        // println!("GIT_TEMPLATE_DIR: {:?}", variables.get("GIT_TEMPLATE_DIR"));
+        // println!("GS_LIB: {:?}", variables.get("GS_LIB"));
+        // println!("GS_FONTPATH: {:?}", variables.get("GS_FONTPATH"));
 
         assert_eq!(variables.get("GIT_EXEC_PATH"), Some(&"/build/usr/lib/git-core".to_string()));
         assert_eq!(variables.get("GIT_TEMPLATE_DIR"), Some(&"/build/usr/lib/git-core/templates".to_string()));
