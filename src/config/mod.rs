@@ -3,3 +3,4 @@ pub(crate) use requested_package::*;
 
 mod buildpack_config;
 mod requested_package;
+pub(crate) mod environment;
