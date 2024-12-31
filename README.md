@@ -53,9 +53,13 @@ specified there. See below for the [configuration schema](#schema) and an [examp
 
 ### Configuring Environment Variables
 
-You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.
+You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.  There can be more than one environment variable defined for each package.
 
 During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual paths so the variables are available at both `build` and `launch` phases using [layer environment variables][cnb-environment].
+
+### Executing Commands After Package Installation
+
+You can specify commands to be executed after the installation of each package by defining them in the project.toml file under the commands key for each package. These commands will be executed in the order they are listed.
 
 #### Example
 
@@ -70,16 +74,9 @@ install = [
     # string version of a dependency to install
     system-cron,
     # inline-table version of a dependency to install
-    { name = "git", 
-      env = { "GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", 
-              "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates" }
-    },
+    { name = "git", env = { "GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates" }, commands = ["echo 'Git installed successfully'", "git --version"]},
     { name = "babeld" },
-    { name = "ghostscript",
-      skip_dependencies = true,
-      force = true,
-      env = { "GS_LIB" = "{install_dir}/var/lib/ghostscript" }
-    },
+    { name = "ghostscript", skip_dependencies = true, force = true, env = { "GS_LIB" = "{install_dir}/var/lib/ghostscript" }, commands = ["echo Ghostscript installed successfully", "gs --version"]},
 ]
 ```
 
@@ -115,6 +112,10 @@ install = [
             - `env` *__([inline-table][toml-inline-table], optional, default={})__*
 
               A table of environment variables to set for the package. The keys are the variable names and the values are the variable values. The `{build_dir}` placeholder can be used in the values and will be replaced with the actual build directory path.
+
+            - `commands` *__([array][toml-array], optional, default=[])__*
+
+              A list of commands to execute after the package is installed. The commands will be executed in the order they are listed.
 
 > [!TIP]
 > Users of the [heroku-community/apt][classic-apt-buildpack] can migrate their Aptfile to the above configuration by
