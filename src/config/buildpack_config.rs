@@ -108,6 +108,8 @@ impl From<ConfigError> for libcnb::Error<DebianPackagesBuildpackError> {
 #[cfg(test)]
 mod test {
     use crate::debian::PackageName;
+    use indexmap::IndexSet;
+    use std::str::FromStr;
 
     use super::*;
 
@@ -120,34 +122,44 @@ schema-version = "0.2"
 [com.heroku.buildpacks.deb-packages]
 install = [
     "package1",
-    { name = "package2" },
-    { name = "package3", skip_dependencies = true, force = true },
+    { name = "package2", env = {"ENV_VAR_1" = "VALUE_1"}, commands = ["command1", "command2"] },
+    { name = "package3", skip_dependencies = true, force = true, env = {"ENV_VAR_2" = "VALUE_2", "ENV_VAR_3" = "VALUE_3"}, commands = ["command3"] },
 ]
         "#
         .trim();
+        // println!("TOML content:\n{}", toml);
+
         let config = BuildpackConfig::from_str(toml).unwrap();
-        assert_eq!(
-            config,
-            BuildpackConfig {
-                install: IndexSet::from([
-                    RequestedPackage {
-                        name: PackageName::from_str("package1").unwrap(),
-                        skip_dependencies: false,
-                        force: false,
-                    },
-                    RequestedPackage {
-                        name: PackageName::from_str("package2").unwrap(),
-                        skip_dependencies: false,
-                        force: false,
-                    },
-                    RequestedPackage {
-                        name: PackageName::from_str("package3").unwrap(),
-                        skip_dependencies: true,
-                        force: true,
-                    }
-                ])
-            }
-        );
+        // println!("Deserialized config: {:?}", config);
+
+        let expected_config = BuildpackConfig {
+            install: IndexSet::from([
+                RequestedPackage {
+                    name: PackageName::from_str("package1").unwrap(),
+                    skip_dependencies: false,
+                    force: false,
+                    // env: None,
+                    commands: vec![],
+                },
+                RequestedPackage {
+                    name: PackageName::from_str("package2").unwrap(),
+                    skip_dependencies: false,
+                    force: false,
+                    // env: None,
+                    commands: vec!["command1".to_string(), "command2".to_string()],
+                },
+                RequestedPackage {
+                    name: PackageName::from_str("package3").unwrap(),
+                    skip_dependencies: true,
+                    force: true,
+                    // env: None,
+                    commands: vec!["command3".to_string()],
+                },
+            ]),
+        };
+        // println!("Expected config: {:?}", expected_config);
+
+        assert_eq!(config, expected_config);
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use std::str::FromStr;
+// use std::collections::HashMap;
 
 use toml_edit::{Formatted, InlineTable, Value};
 
@@ -9,6 +10,8 @@ pub(crate) struct RequestedPackage {
     pub(crate) name: PackageName,
     pub(crate) skip_dependencies: bool,
     pub(crate) force: bool,
+    // pub(crate) env: Option<HashMap<String, String>>,
+    pub(crate) commands: Vec<String>,
 }
 
 impl FromStr for RequestedPackage {
@@ -20,6 +23,8 @@ impl FromStr for RequestedPackage {
                 .map_err(ParseRequestedPackageError::InvalidPackageName)?,
             skip_dependencies: false,
             force: false,
+            // env: None,
+            commands: Vec::new(),
         })
     }
 }
@@ -68,6 +73,24 @@ impl TryFrom<&InlineTable> for RequestedPackage {
                 .get("force")
                 .and_then(Value::as_bool)
                 .unwrap_or_default(),
+
+            // env: table
+            //     .get("env")
+            //     .and_then(Value::as_table)
+            //     .map(|table| {
+            //         table
+            //             .iter()
+            //             .filter_map(|(key, value)| {
+            //                 value.as_str().map(|value| (key.to_string(), value.to_string()))
+            //             })
+            //             .collect()
+            //     }),
+
+            commands: table
+                .get("commands")
+                .and_then(Value::as_array)
+                .map(|array| array.iter().filter_map(Value::as_str).map(String::from).collect())
+                .unwrap_or_default(),  // Initialize with an empty vector if not present
         })
     }
 }

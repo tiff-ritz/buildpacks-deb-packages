@@ -3,14 +3,7 @@ schema-version = "0.2"
 
 [com.heroku.buildpacks.deb-packages]
 install = [
-    { name = "git", 
-      env = { "GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", 
-              "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates" }
-    },
+    { name = "git", env = {"GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates"}, commands = ["echo 'Git installed successfully'", "git --version"]},
     { name = "babeld" },
-    { name = "ghostscript",
-      skip_dependencies = true,
-      force = true,
-      env = { "GS_LIB" = "{install_dir}/var/lib/ghostscript" }
-    },
+    { name = "ghostscript", skip_dependencies = true, force = true, env = {"GS_LIB" = "{install_dir}/var/lib/ghostscript"}, commands = ["echo 'Ghostscript installed successfully'", "gs --version"]},
 ]
