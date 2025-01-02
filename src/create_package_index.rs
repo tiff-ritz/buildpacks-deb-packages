@@ -636,3 +636,113 @@ impl Display for UpdatedSourceCacheState {
         }
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use libcnb::build::BuildContext;
+//     use crate::debian::{Distro, DistroCodename, ArchitectureName};
+//     use bullet_stream::Print;
+//     use bullet_stream::state::Bullet;
+//     // use crate::create_package_index::Bullet;
+//     use std::io::stdout;
+//     use std::sync::Arc;
+//     use super::*;
+//     // use crate::debian_packages_buildpack::DebianPackagesBuildpack;
+//     // use reqwest_middleware::{ClientWithMiddleware, ClientBuilder};
+//     use reqwest_middleware::ClientBuilder;
+//     // use reqwest_middleware::Middleware;
+//     // use crate::architecture_name::ArchitectureName;
+//     use std::collections::HashMap;
+//     use tempfile::tempdir;
+//     // use std::fs::File;
+//     // use std::io::Write;
+
+//     // #[test]
+//     #[tokio::test]
+//     async fn test_create_package_index_basic() {
+//         let packages = vec![
+//             ("package1", "1.0.0"),
+//             ("package2", "2.0.0"),
+//         ];
+
+//         // Create a mock client with an empty middleware stack
+//         let client = ClientBuilder::new(reqwest::Client::new())
+//             .build();
+
+//         // Create a mock distro
+//         let distro = Distro {
+//             // Initialize the fields of Distro as required
+//             name: "mock-distro".to_string(),
+//             version: "1.0.0".to_string(),
+//             codename: DistroCodename::Jammy,
+//             architecture: ArchitectureName::from_str("amd64").unwrap(),
+//         };        
+   
+//         // Create a mock log
+//         let log = Print::new(Bullet::new(stdout()));
+
+//         // // Create a mock context
+//         // let context = Arc::new(BuildContext {
+//         //     buildpack: DebianPackagesBuildpack::default(),
+//         //     layers_dir: tempdir().unwrap().into_path(),
+//         //     platform: HashMap::new(),
+//         //     app_dir: tempdir().unwrap().into_path(),
+//         //     buildpack_dir: tempdir().unwrap().into_path(),
+//         //     stack_id: "test-stack".to_string(),
+//         //     launch: false,
+//         //     build: false,
+//         //     cache: false,
+//         //     plan: Default::default(),
+//         //     layers: Default::default(), 
+//         // });
+
+//         // Create a mock context
+//         let context = Arc::new(BuildContext::new(
+//             DebianPackagesBuildpack::default(),
+//             tempdir().unwrap().into_path(),
+//             HashMap::new(),
+//         ));
+   
+//         let index = create_package_index(&context, &client, &distro, log);
+//         assert!(index.contains("package1"));
+//         assert!(index.contains("package2"));
+//     }
+
+//     // #[test]
+//     // fn test_create_package_index_empty() {
+//     //     let packages: Vec<(&str, &str)> = vec![];
+//     //     let index = create_package_index(&packages);
+//     //     assert!(index.is_empty());
+//     // }
+
+//     // #[test]
+//     // fn test_create_package_index_invalid_data() {
+//     //     let packages = vec![
+//     //         ("package1", ""),
+//     //         ("", "2.0.0"),
+//     //     ];
+//     //     let result = create_package_index(&packages);
+//     //     assert!(result.is_err());
+//     // }
+
+//     // #[test]
+//     // fn test_create_package_index_large_input() {
+//     //     let mut packages = vec![];
+//     //     for i in 0..1000 {
+//     //         packages.push((format!("package{}", i).as_str(), "1.0.0"));
+//     //     }
+//     //     let index = create_package_index(&packages);
+//     //     assert_eq!(index.len(), 1000);
+//     // }
+
+//     // #[test]
+//     // fn test_create_package_index_special_characters() {
+//     //     let packages = vec![
+//     //         ("package@1", "1.0.0"),
+//     //         ("package#2", "2.0.0"),
+//     //     ];
+//     //     let index = create_package_index(&packages);
+//     //     assert!(index.contains("package@1"));
+//     //     assert!(index.contains("package#2"));
+//     // }
+// }
