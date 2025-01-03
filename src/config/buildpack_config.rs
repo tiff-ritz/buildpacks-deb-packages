@@ -114,7 +114,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_deserialize() {
+    fn test_deserialize_basic() {
         let toml = r#"
 [_]
 schema-version = "0.2"
@@ -160,6 +160,83 @@ install = [
         // println!("Expected config: {:?}", expected_config);
 
         assert_eq!(config, expected_config);
+    }
+
+    #[test]
+    fn test_deserialize_with_env() {
+        let toml = r#"
+[_]
+schema-version = "0.2"
+
+[com.heroku.buildpacks.deb-packages]
+install = [
+    { name = "package1", env = {"ENV_VAR_1" = "VALUE_1"} },
+]
+        "#
+        .trim();
+
+        let config = BuildpackConfig::from_str(toml).unwrap();
+
+        let expected_config = BuildpackConfig {
+            install: IndexSet::from([
+                RequestedPackage {
+                    name: PackageName::from_str("package1").unwrap(),
+                    skip_dependencies: false,
+                    force: false,
+                    // env: Some(HashMap::from([("ENV_VAR_1".to_string(), "VALUE_1".to_string())])),
+                    commands: vec![],
+                },
+            ]),
+        };
+
+        assert_eq!(config, expected_config);
+    }
+
+    #[test]
+    fn test_deserialize_with_commands() {
+        let toml = r#"
+[_]
+schema-version = "0.2"
+
+[com.heroku.buildpacks.deb-packages]
+install = [
+    { name = "package1", commands = ["echo 'Hello, world!'"] },
+]
+        "#
+        .trim();
+
+        let config = BuildpackConfig::from_str(toml).unwrap();
+
+        let expected_config = BuildpackConfig {
+            install: IndexSet::from([
+                RequestedPackage {
+                    name: PackageName::from_str("package1").unwrap(),
+                    skip_dependencies: false,
+                    force: false,
+                    // env: None,
+                    commands: vec!["echo 'Hello, world!'".to_string()],
+                },
+            ]),
+        };
+
+        assert_eq!(config, expected_config);
+    }
+
+    #[test]
+    fn test_deserialize_invalid_config() {
+        let toml = r#"
+[_]
+schema-version = "0.2"
+
+[com.heroku.buildpacks.deb-packages]
+install = [
+    { name = 123 },
+]
+        "#
+        .trim();
+
+        let result = BuildpackConfig::from_str(toml);
+        assert!(result.is_err());
     }
 
     #[test]

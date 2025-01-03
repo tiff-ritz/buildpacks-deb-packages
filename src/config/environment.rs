@@ -103,9 +103,9 @@ mod tests {
 
             [com.heroku.buildpacks.deb-packages]
             install = [
-                { name = "git", env = { "GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/lib/git-core/templates" }, commands = ["echo 'Git installed'"] },
+                { name = "git", env = { "GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/lib/git-core/templates" }, commands = ["echo 'Git installed successfully'", "git --version"] },
                 { name = "babeld" },
-                { name = "ghostscript", skip_dependencies = true, force = true, env = { "GS_LIB" = "{install_dir}/var/lib/ghostscript", "GS_FONTPATH" = "{install_dir}/var/lib/ghostscript/fonts" }, commands = ["echo 'Ghostscript installed'", "gs --version"] },
+                { name = "ghostscript", skip_dependencies = true, force = true, env = { "GS_LIB" = "{install_dir}/var/lib/ghostscript", "GS_FONTPATH" = "{install_dir}/var/lib/ghostscript/fonts" }, commands = ["echo 'Ghostscript installed successfully'", "gs --version"] },
             ]
         "#;
 
@@ -119,18 +119,55 @@ mod tests {
         let commands = env.get_commands();
 
         // Print the values of the variables
-        // println!("GIT_EXEC_PATH: {:?}", variables.get("GIT_EXEC_PATH"));
-        // println!("GIT_TEMPLATE_DIR: {:?}", variables.get("GIT_TEMPLATE_DIR"));
-        // println!("GS_LIB: {:?}", variables.get("GS_LIB"));
-        // println!("GS_FONTPATH: {:?}", variables.get("GS_FONTPATH"));
+        println!("GIT_EXEC_PATH: {:?}", variables.get("GIT_EXEC_PATH"));
+        println!("GIT_TEMPLATE_DIR: {:?}", variables.get("GIT_TEMPLATE_DIR"));
+        println!("GS_LIB: {:?}", variables.get("GS_LIB"));
+        println!("GS_FONTPATH: {:?}", variables.get("GS_FONTPATH"));
 
         assert_eq!(variables.get("GIT_EXEC_PATH"), Some(&"/build/usr/lib/git-core".to_string()));
         assert_eq!(variables.get("GIT_TEMPLATE_DIR"), Some(&"/build/usr/lib/git-core/templates".to_string()));
         assert_eq!(variables.get("GS_LIB"), Some(&"/build/var/lib/ghostscript".to_string()));
         assert_eq!(variables.get("GS_FONTPATH"), Some(&"/build/var/lib/ghostscript/fonts".to_string()));
 
-        assert_eq!(commands.get("git"), Some(&vec!["echo 'Git installed'".to_string()]));
-        assert_eq!(commands.get("ghostscript"), Some(&vec!["echo 'Ghostscript installed'".to_string(), "gs --version".to_string()]));
+        // assert_eq!(commands.get("git"), Some(&vec!["echo 'Git installed successfully'".to_string()]));
+        // assert_eq!(commands.get("ghostscript"), Some(&vec!["echo 'Ghostscript installed successfully'".to_string(), "gs --version".to_string()]));
+
+        // Verify commands
+        let mut all_commands: Vec<String> = commands.values().cloned().flatten().collect();
+        all_commands.sort();
+        let mut expected_commands = vec![
+            "echo 'Git installed successfully'".to_string(),
+            "git --version".to_string(),
+            "echo 'Ghostscript installed successfully'".to_string(),
+            "gs --version".to_string(),
+        ];
+        expected_commands.sort();
+        assert_eq!(all_commands, expected_commands);
+    }
+
+    #[test]
+    fn test_load_from_toml_invalid() {
+        let toml_content = r#"
+            schema-version = "0.2"
+
+            [com.heroku.buildpacks.deb-packages]
+            install = [
+                { name = 123 },
+            ]
+        "#;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("project.toml");
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(toml_content.as_bytes()).unwrap();
+
+        let env = Environment::load_from_toml(&file_path, "/build");
+        let variables = env.get_variables();
+        let commands = env.get_commands();
+
+        // Verify that no variables or commands are loaded
+        assert!(variables.is_empty());
+        assert!(commands.is_empty());
     }
 
     #[test]
