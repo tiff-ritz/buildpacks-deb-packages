@@ -76,6 +76,11 @@ impl Environment {
         }
     }
 
+    /// Check if a package is present in the environment configuration
+    pub(crate) fn has_package(&self, package_name: &str) -> bool {
+        self.commands.contains_key(package_name)
+    }
+
     /// Get environment variables as a `HashMap`.
     pub(crate) fn get_variables(&self) -> &HashMap<String, String> {
         &self.variables
@@ -225,4 +230,29 @@ mod tests {
 
         assert_eq!(all_commands, expected_commands);
     }
+
+    #[test]
+    fn test_has_package() {
+        let toml_content = r#"
+            schema-version = "0.2"
+
+            [com.heroku.buildpacks.deb-packages]
+            install = [
+                { name = "git", commands = ["echo 'Git installed successfully'", "git --version"] },
+                { name = "babeld" },
+                { name = "ghostscript", skip_dependencies = true, force = true, commands = ["echo 'Ghostscript installed successfully'", "gs --version"] }
+            ]
+        "#;
+
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("project.toml");
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(toml_content.as_bytes()).unwrap();
+
+        let env = Environment::load_from_toml(&file_path, "/build");
+
+        assert!(env.has_package("git"));
+        assert!(env.has_package("ghostscript"));
+        assert!(!env.has_package("nonexistent-package"));
+    }    
 }
