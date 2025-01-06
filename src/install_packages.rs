@@ -8,6 +8,7 @@ use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use toml_edit::DocumentMut;
+use std::process::Command;
 
 use ar::Archive as ArArchive;
 use async_compression::tokio::bufread::{GzipDecoder, XzDecoder, ZstdDecoder};
@@ -34,6 +35,7 @@ use tokio_util::compat::FuturesAsyncReadCompatExt;
 use tokio_util::io::InspectReader;
 use walkdir::{DirEntry, WalkDir};
 
+use crate::config::environment::Environment;
 use crate::debian::{Distro, MultiarchName, RepositoryPackage};
 use crate::{
     is_buildpack_debug_logging_enabled, BuildpackResult, DebianPackagesBuildpack,
@@ -118,7 +120,7 @@ pub(crate) async fn install_packages(
 
             let mut download_and_extract_handles = JoinSet::new();
 
-            for repository_package in packages_to_install {
+            for repository_package in &packages_to_install {
                 download_and_extract_handles.spawn(download_and_extract(
                     client.clone(),
                     repository_package.clone(),
@@ -146,6 +148,19 @@ pub(crate) async fn install_packages(
 
     rewrite_package_configs(&install_layer.path()).await?;
 
+    // Load and apply environment variables from the project.toml file
+    let env_file_path = context.app_dir.join("project.toml");
+    let env = Environment::load_from_toml(&env_file_path, &install_layer.path().to_string_lossy());
+    env.apply();
+
+    // Execute commands after package installation
+    let commands = env.get_commands();
+    for package in &packages_to_install {
+        if let Some(package_commands) = commands.get(&package.name.to_string()) {
+            log = execute_commands_and_log(package_commands, &env.get_variables(), &package.name, log).await;
+        }
+    }
+
     let mut install_log = log.bullet("Installation complete");
     if is_buildpack_debug_logging_enabled() {
         install_log = print_layer_contents(&install_layer.path(), install_log);
@@ -153,6 +168,42 @@ pub(crate) async fn install_packages(
     log = install_log.done();
 
     Ok(log)
+}
+
+async fn execute_commands_and_log(
+    commands: &[String],
+    env_variables: &HashMap<String, String>,
+    package_name: &str,
+    mut log: Print<Bullet<Stdout>>,
+) -> Print<Bullet<Stdout>> {
+    log = log.h2(format!("Running commands for package: {}", package_name));
+    for command in commands {
+        log = log.bullet(format!("Executing command: {}", command)).done();
+
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg(command);
+        cmd.envs(env_variables);
+
+        let output = cmd.output().expect("Failed to execute command");
+        if output.status.success() {
+            log = log
+                .bullet(format!(
+                    "Command succeeded: {}\nOutput: {}",
+                    command,
+                    String::from_utf8_lossy(&output.stdout)
+                ))
+                .done();
+        } else {
+            log = log
+                .bullet(format!(
+                    "Command failed: {}\nError: {}",
+                    command,
+                    String::from_utf8_lossy(&output.stderr)
+                ))
+                .done();
+        }
+    }
+    log
 }
 
 fn print_layer_contents(
@@ -356,6 +407,16 @@ fn configure_layer_environment(install_path: &Path, multiarch_name: &MultiarchNa
     }
 
     // support multi-arch and legacy filesystem layouts for debian packages
+    // Load and apply environment variables from the project.toml file
+    let project_toml_path = install_path.join("project.toml");
+    if project_toml_path.exists() {
+        let env = Environment::load_from_toml(&project_toml_path, &install_path.to_string_lossy());
+        for (key, value) in env.get_variables() {
+            prepend_to_env_var(&mut layer_env, key, vec![value.clone()]);
+        }
+    }
+
+    // Support multi-arch and legacy filesystem layouts for debian packages
     let library_paths = [
         install_path.join(format!("usr/lib/{multiarch_name}")),
         install_path.join("usr/lib"),
@@ -677,5 +738,59 @@ mod unit_tests {
             layer_env.apply_to_empty(Scope::All).get("GS_LIB").map(|s| s.to_string_lossy().into_owned()),
             Some(install_path.join("var/lib/ghostscript").to_string_lossy().to_string())
         );
+    }
+}
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use std::collections::HashMap;
+    use bullet_stream::Print;
+    use std::io::stdout;
+    use crate::debian::RepositoryUri; // Import RepositoryUri
+
+    #[tokio::test]
+    async fn test_run_commands_after_install() {
+        // Create a temporary directory for testing
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("testfile");
+
+        // Simulated packages to install
+        let packages_to_install = vec![
+            RepositoryPackage {
+                name: "testpackage".to_string(),
+                version: "1.0.0".to_string(),
+                filename: "testpackage.deb".to_string(),
+                repository_uri: RepositoryUri::from("http://example.com"),
+                sha256sum: "".to_string(),
+                depends: None,
+                pre_depends: None,
+                provides: None,
+            }
+        ];
+
+        // Simulated environment configuration
+        let env = Environment::new(
+            HashMap::new(),
+            HashMap::from([
+                ("testpackage".to_string(), vec![
+                    format!("touch {}", file_path.display()),
+                    format!("echo 'Hello, world!' > {}", file_path.display())
+                ])
+            ])
+        );
+
+        // Simulated log
+        let mut log = Print::new(stdout()).h2("Running commands");
+
+        // Execute commands after package installation
+        for package in &packages_to_install {
+            if let Some(package_commands) = env.get_commands().get(&package.name) {
+                log = execute_commands_and_log(package_commands, &env.get_variables(), &package.name, log).await;
+            }
+        }
+
+        // Verify that the file was created and contains the expected content
+        let content = std::fs::read_to_string(file_path).expect("Failed to read file");
+        assert_eq!(content, "Hello, world!\n");
     }
 }

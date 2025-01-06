@@ -51,6 +51,16 @@ The configuration for this buildpack must be added to the project descriptor fil
 project using the `com.heroku.buildpacks.deb-packages` table. The list of packages to install must be
 specified there. See below for the [configuration schema](#schema) and an [example](#example).
 
+### Configuring Environment Variables
+
+You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.  There can be more than one environment variable defined for each package.
+
+During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual paths so the variables are available at both `build` and `launch` phases using [layer environment variables][cnb-environment].
+
+### Executing Commands After Package Installation
+
+You can specify commands to be executed after the installation of each package by defining them in the project.toml file under the commands key for each package. These commands will be executed in the order they are listed.
+
 #### Example
 
 ```toml
@@ -61,10 +71,20 @@ schema-version = "0.2"
 # buildpack configuration goes here
 [com.heroku.buildpacks.deb-packages]
 install = [
-    # string version of a dependency to install
-    "package-name",
-    # inline-table version of a dependency to install
-    { name = "package-name", skip_dependencies = true, force = true }
+  # basic package with some dependencies
+  "libgwenhywfar79",
+  # child package of "libgwenhywfar79" so we should get a warning that it was already installed by the previous entry
+  "libgwenhywfar-data",
+  # package with child dependencies skipped so no "libxmlsec1" or "libxmlsec1-openssl" will be installed
+  { name = "xmlsec1", skip_dependencies = true },
+  # a package already installed on the system
+  "wget",
+  # libvips is a virtual package which is only provided by libvips42 so no need to halt and ask the user which implementing package to install
+  "libvips",
+  # curl is already on the system so we're going to force it to be installed
+  { name = "curl", force = true },
+  # git needs to have environment variables set and post installation commands run
+  { name = "git", env = {"GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates"}, commands = ["echo 'Git installed successfully'", "git --version"]},
 ]
 ```
 
@@ -96,6 +116,14 @@ install = [
             - `force` *__([boolean][toml-boolean], optional, default = false)__*
 
               If set to `true`, the package will be installed even if it's already installed on the system.
+
+            - `env` *__([inline-table][toml-inline-table], optional, default={})__*
+
+              A table of environment variables to set for the package. The keys are the variable names and the values are the variable values. The `{build_dir}` placeholder can be used in the values and will be replaced with the actual build directory path.
+
+            - `commands` *__([array][toml-array], optional, default=[])__*
+
+              A list of commands to execute after the package is installed. The commands will be executed in the order they are listed.
 
 > [!TIP]
 > Users of the [heroku-community/apt][classic-apt-buildpack] can migrate their Aptfile to the above configuration by
@@ -199,6 +227,7 @@ For each package added after [determining the packages to install](#step-2-deter
 | `INCLUDE_PATH`       | `/<layer_dir>/usr/include/<arch>` <br> `/<layer_dir>/usr/include`                                                | header files     |
 | `CPATH`              | Same as `INCLUDE_PATH`                                                                                           | header files     |
 | `CPPPATH`            | Same as `INCLUDE_PATH`                                                                                           | header files     |
+
 
 | `PKG_CONFIG_PATH`    | `/<layer_dir>/usr/lib/<arch>/pkgconfig` <br> `/<layer_dir>/usr/lib/pkgconfig`                                    | pc files         |
 | `GIT_EXEC_PATH`    | `/<layer_dir>/app/.apt/usr/lib/git-core`                                    | git files         |
