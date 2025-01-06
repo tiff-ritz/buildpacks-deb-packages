@@ -108,6 +108,7 @@ impl From<ConfigError> for libcnb::Error<DebianPackagesBuildpackError> {
 #[cfg(test)]
 mod test {
     use crate::debian::PackageName;
+    use std::collections::HashMap;
     use indexmap::IndexSet;
     use std::str::FromStr;
 
@@ -127,10 +128,10 @@ install = [
 ]
         "#
         .trim();
-        // println!("TOML content:\n{}", toml);
+        println!("TOML content:\n{}", toml);
 
         let config = BuildpackConfig::from_str(toml).unwrap();
-        // println!("Deserialized config: {:?}", config);
+        println!("Deserialized config: {:?}", config);
 
         let expected_config = BuildpackConfig {
             install: IndexSet::from([
@@ -138,26 +139,31 @@ install = [
                     name: PackageName::from_str("package1").unwrap(),
                     skip_dependencies: false,
                     force: false,
-                    // env: None,
+                    env: None,
                     commands: vec![],
                 },
                 RequestedPackage {
                     name: PackageName::from_str("package2").unwrap(),
                     skip_dependencies: false,
                     force: false,
-                    // env: None,
+                    env: Some(HashMap::from([
+                        ("ENV_VAR_1".to_string(), "VALUE_1".to_string()),
+                    ])),
                     commands: vec!["command1".to_string(), "command2".to_string()],
                 },
                 RequestedPackage {
                     name: PackageName::from_str("package3").unwrap(),
                     skip_dependencies: true,
                     force: true,
-                    // env: None,
+                    env: Some(HashMap::from([
+                        ("ENV_VAR_2".to_string(), "VALUE_2".to_string()),
+                        ("ENV_VAR_3".to_string(), "VALUE_3".to_string()),
+                    ])),
                     commands: vec!["command3".to_string()],
                 },
             ]),
         };
-        // println!("Expected config: {:?}", expected_config);
+        println!("Expected config: {:?}", expected_config);
 
         assert_eq!(config, expected_config);
     }
@@ -183,7 +189,7 @@ install = [
                     name: PackageName::from_str("package1").unwrap(),
                     skip_dependencies: false,
                     force: false,
-                    // env: Some(HashMap::from([("ENV_VAR_1".to_string(), "VALUE_1".to_string())])),
+                    env: Some(HashMap::from([("ENV_VAR_1".to_string(), "VALUE_1".to_string())])),
                     commands: vec![],
                 },
             ]),
@@ -213,7 +219,7 @@ install = [
                     name: PackageName::from_str("package1").unwrap(),
                     skip_dependencies: false,
                     force: false,
-                    // env: None,
+                    env: None,
                     commands: vec!["echo 'Hello, world!'".to_string()],
                 },
             ]),

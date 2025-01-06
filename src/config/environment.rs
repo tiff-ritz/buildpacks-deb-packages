@@ -119,18 +119,15 @@ mod tests {
         let commands = env.get_commands();
 
         // Print the values of the variables
-        println!("GIT_EXEC_PATH: {:?}", variables.get("GIT_EXEC_PATH"));
-        println!("GIT_TEMPLATE_DIR: {:?}", variables.get("GIT_TEMPLATE_DIR"));
-        println!("GS_LIB: {:?}", variables.get("GS_LIB"));
-        println!("GS_FONTPATH: {:?}", variables.get("GS_FONTPATH"));
+        // println!("GIT_EXEC_PATH: {:?}", variables.get("GIT_EXEC_PATH"));
+        // println!("GIT_TEMPLATE_DIR: {:?}", variables.get("GIT_TEMPLATE_DIR"));
+        // println!("GS_LIB: {:?}", variables.get("GS_LIB"));
+        // println!("GS_FONTPATH: {:?}", variables.get("GS_FONTPATH"));
 
         assert_eq!(variables.get("GIT_EXEC_PATH"), Some(&"/build/usr/lib/git-core".to_string()));
         assert_eq!(variables.get("GIT_TEMPLATE_DIR"), Some(&"/build/usr/lib/git-core/templates".to_string()));
         assert_eq!(variables.get("GS_LIB"), Some(&"/build/var/lib/ghostscript".to_string()));
         assert_eq!(variables.get("GS_FONTPATH"), Some(&"/build/var/lib/ghostscript/fonts".to_string()));
-
-        // assert_eq!(commands.get("git"), Some(&vec!["echo 'Git installed successfully'".to_string()]));
-        // assert_eq!(commands.get("ghostscript"), Some(&vec!["echo 'Ghostscript installed successfully'".to_string(), "gs --version".to_string()]));
 
         // Verify commands
         let mut all_commands: Vec<String> = commands.values().cloned().flatten().collect();

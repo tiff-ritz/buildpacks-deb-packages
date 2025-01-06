@@ -1,17 +1,33 @@
 use std::str::FromStr;
-// use std::collections::HashMap;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
 use toml_edit::{Formatted, InlineTable, Value};
 
 use crate::debian::{PackageName, ParsePackageNameError};
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq)]
 pub(crate) struct RequestedPackage {
     pub(crate) name: PackageName,
     pub(crate) skip_dependencies: bool,
     pub(crate) force: bool,
-    // pub(crate) env: Option<HashMap<String, String>>,
+    pub(crate) env: Option<HashMap<String, String>>,
     pub(crate) commands: Vec<String>,
+}
+
+impl Hash for RequestedPackage {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.skip_dependencies.hash(state);
+        self.force.hash(state);
+        if let Some(env) = &self.env {
+            for (key, value) in env {
+                key.hash(state);
+                value.hash(state);
+            }
+        }
+        self.commands.hash(state);
+    }
 }
 
 impl FromStr for RequestedPackage {
@@ -23,7 +39,7 @@ impl FromStr for RequestedPackage {
                 .map_err(ParseRequestedPackageError::InvalidPackageName)?,
             skip_dependencies: false,
             force: false,
-            // env: None,
+            env: None,
             commands: Vec::new(),
         })
     }
@@ -74,17 +90,17 @@ impl TryFrom<&InlineTable> for RequestedPackage {
                 .and_then(Value::as_bool)
                 .unwrap_or_default(),
 
-            // env: table
-            //     .get("env")
-            //     .and_then(Value::as_table)
-            //     .map(|table| {
-            //         table
-            //             .iter()
-            //             .filter_map(|(key, value)| {
-            //                 value.as_str().map(|value| (key.to_string(), value.to_string()))
-            //             })
-            //             .collect()
-            //     }),
+            env: table
+                .get("env")
+                .and_then(Value::as_inline_table)
+                .map(|table| {
+                    table
+                        .iter()
+                        .filter_map(|(key, value)| {
+                            value.as_str().map(|value| (key.to_string(), value.to_string()))
+                        })
+                        .collect()
+                }),
 
             commands: table
                 .get("commands")
@@ -115,7 +131,7 @@ mod tests {
                 name: PackageName::from_str("package1").unwrap(),
                 skip_dependencies: false,
                 force: false,
-                // env: None,
+                env: None,
                 commands: Vec::new(),
             }
         );
@@ -136,7 +152,7 @@ mod tests {
                 name: PackageName::from_str("package1").unwrap(),
                 skip_dependencies: false,
                 force: false,
-                // env: Some(HashMap::from([("ENV_VAR_1".to_string(), "VALUE_1".to_string())])),
+                env: Some(HashMap::from([("ENV_VAR_1".to_string(), "VALUE_1".to_string())])),
                 commands: Vec::new(),
             }
         );
@@ -158,7 +174,7 @@ mod tests {
                 name: PackageName::from_str("package1").unwrap(),
                 skip_dependencies: false,
                 force: false,
-                // env: None,
+                env: None,
                 commands: vec!["echo 'Hello, world!'".to_string(), "ls -la".to_string()],
             }
         );
