@@ -57,6 +57,11 @@ You can configure environment variables for the packages installed by this build
 
 During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual paths so the variables are available at both `build` and `launch` phases using [layer environment variables][cnb-environment].
 
+### Default Package Environment Variables
+The buildpack includes a set of default environment variables for each package, known as `PACKAGE_ENV_VARS`. These default environment variables are applied during the build process. However, you can override these default values by specifying environment variables in the project.toml file.
+
+If a package is listed in the project.toml file with environment variables under the env key, those variables will take precedence over the default `PACKAGE_ENV_VARS`.
+
 ### Executing Commands After Package Installation
 
 You can specify commands to be executed after the installation of each package by defining them in the project.toml file under the commands key for each package. These commands will be executed in the order they are listed.
