@@ -158,29 +158,35 @@ pub(crate) async fn install_packages(
         }
     }
 
-    // Configure the environment variables for the installed layer
-    let mut layer_env = configure_layer_environment(
-        &install_layer.path(),
-        &MultiarchName::from(&distro.architecture),
-    );
-
     // Load and apply environment variables from the project.toml file
     let env_file_path = context.app_dir.join("project.toml");
     let env = Environment::load_from_toml(&env_file_path, &install_layer.path().to_string_lossy());
 
-    // Apply package-specific environment variables if the package is in project.toml
-    let package_env_vars = package_env_vars();
-    for package in &packages_to_install {
-        if env.has_package(&package.name) {
-            if let Some(vars) = package_env_vars.get(package.name.as_str()) {
-                for (key, value) in vars {
-                    prepend_to_env_var(&mut layer_env, key, vec![value.to_string()]);
-                }
-            }
-        }
-    }    
-
     env.apply();
+
+    // Apply package-specific environment variables if the package is in project.toml
+    // let package_env_vars = package_env_vars();    
+    // Convert package_env_vars to the correct type
+    let package_env_vars: HashMap<String, HashMap<String, String>> = package_env_vars()
+        .into_iter()
+        .map(|(k, v)| {
+            (
+                k.to_string(),
+                v.into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+            )
+        })
+        .collect();
+
+    // Configure the environment variables for the installed layer
+    let mut layer_env = configure_layer_environment(
+        &install_layer.path(),
+        &MultiarchName::from(&distro.architecture),
+        &package_env_vars,
+        &packages_to_install,
+        &env,
+    );
 
     install_layer.write_env(layer_env)?;
 
@@ -400,7 +406,14 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
     Ok(())
 }
 
-fn configure_layer_environment(install_path: &Path, multiarch_name: &MultiarchName) -> LayerEnv {
+fn configure_layer_environment(
+    install_path: &Path,
+    multiarch_name: &MultiarchName,
+    package_env_vars: &HashMap<String, HashMap<String, String>>,
+    packages_to_install: &[RepositoryPackage],
+    env: &Environment,
+) -> LayerEnv {
+
     let mut layer_env = LayerEnv::new();
 
     let bin_paths = [
@@ -487,6 +500,17 @@ fn configure_layer_environment(install_path: &Path, multiarch_name: &MultiarchNa
         install_path.join("usr/lib/pkgconfig"),
     ];
     prepend_to_env_var(&mut layer_env, "PKG_CONFIG_PATH", &pkg_config_paths);
+
+    // Apply package-specific environment variables
+    for package in packages_to_install {
+        if env.has_package(&package.name) {
+            if let Some(vars) = package_env_vars.get(package.name.as_str()) {
+                for (key, value) in vars {
+                    prepend_to_env_var(&mut layer_env, key, vec![value.to_string()]);
+                }
+            }
+        }
+    }
 
     layer_env
 }
@@ -645,6 +669,9 @@ mod test {
 
     use crate::debian::MultiarchName;
     use crate::install_packages::configure_layer_environment;
+    use crate::install_packages::package_env_vars;
+    use crate::config::environment::Environment;
+    use crate::install_packages::HashMap;
 
     #[test]
     fn configure_layer_environment_adds_nested_directories_with_shared_libraries_to_library_path() {
@@ -659,7 +686,21 @@ mod test {
             "usr/not-a-lib-dir/shared-library.so.6"
         ]);
         let install_path = install_dir.path();
-        let layer_env = configure_layer_environment(install_path, &arch);
+        // let package_env_vars = package_env_vars(); 
+        // Convert package_env_vars to the correct type
+        let package_env_vars: HashMap<String, HashMap<String, String>> = package_env_vars()
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    k.to_string(),
+                    v.into_iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect(),
+                )
+            })
+            .collect();        
+
+        let layer_env = configure_layer_environment(install_path, &arch, &package_env_vars, &[], &Environment::new(HashMap::new(), HashMap::new()));
         assert_eq!(
             split_into_paths(layer_env.apply_to_empty(Scope::All).get("LD_LIBRARY_PATH")),
             vec![
@@ -687,7 +728,21 @@ mod test {
             "usr/not-an-include-dir/header.h"
         ]);
         let install_path = install_dir.path();
-        let layer_env = configure_layer_environment(install_path, &arch);
+        // let package_env_vars = package_env_vars(); 
+        // Convert package_env_vars to the correct type
+        let package_env_vars: HashMap<String, HashMap<String, String>> = package_env_vars()
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    k.to_string(),
+                    v.into_iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect(),
+                )
+            })
+            .collect();        
+
+        let layer_env = configure_layer_environment(install_path, &arch, &package_env_vars, &[], &Environment::new(HashMap::new(), HashMap::new()));
         assert_eq!(
             split_into_paths(layer_env.apply_to_empty(Scope::All).get("INCLUDE_PATH")),
             vec![
@@ -828,9 +883,9 @@ mod tests {
 
     #[test]
     fn test_package_specific_env_vars() {
-        let arch = MultiarchName::X86_64_LINUX_GNU;
+        // let arch = MultiarchName::X86_64_LINUX_GNU;
         let install_dir = tempdir().unwrap(); // Create a temporary directory
-        let install_path = install_dir.path(); // Get the path of the temporary directory
+        // let install_path = install_dir.path(); // Get the path of the temporary directory
 
         // Simulate the expected environment variables for the git package
         let mut layer_env = LayerEnv::new();
