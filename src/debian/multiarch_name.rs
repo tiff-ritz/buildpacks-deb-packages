@@ -2,7 +2,6 @@ use std::fmt::{Display, Formatter};
 
 use crate::debian::ArchitectureName;
 use std::str::FromStr;
-// use std::fmt::{Display, Formatter};
 
 #[derive(Debug, PartialEq, Clone)]
 #[allow(non_camel_case_types)]

@@ -1,2 +1,9 @@
-git = true
-ghostscript = true
+[_]
+schema-version = "0.2"
+
+[com.heroku.buildpacks.deb-packages]
+install = [
+    { name = "ghostscript", env = {"VAR1" = "{install_dir}/usr/bin"}, commands = ["command1", "command2"] },
+    { name = "package2", skip_dependencies = true, force = true, env = {"VAR2" = "{install_dir}/usr/lib"}, commands = ["command3"] },
+    { name = "git", env = {"VAR3" = "{install_dir}/usr/bin"}, commands = ["command4"] },
+]

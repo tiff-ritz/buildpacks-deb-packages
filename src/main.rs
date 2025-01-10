@@ -122,7 +122,7 @@ impl Buildpack for DebianPackagesBuildpack {
         let (package_index, log) =
             runtime.block_on(create_package_index(&shared_context, &client, &distro, log))?;
 
-        let (packages_to_install, log) =
+        let (packages_to_install, skipped_packages, log) =
             determine_packages_to_install(&package_index, config.install, log)?;
 
         let log = runtime.block_on(install_packages(
@@ -130,6 +130,7 @@ impl Buildpack for DebianPackagesBuildpack {
             &client,
             &distro,
             packages_to_install,
+            skipped_packages, 
             log,
         ))?;
 
