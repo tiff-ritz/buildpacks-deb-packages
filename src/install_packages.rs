@@ -736,9 +736,6 @@ mod test {
             },
         ];
 
-        // println!("Packages to install: {:?}", packages_to_install);
-        // println!("Skipped packages: {:?}", skipped_packages);
-
         // Create a dummy environment
         let temp_dir = TempDir::new().unwrap();
         let env_file_path = temp_dir.path().join("project.toml");
