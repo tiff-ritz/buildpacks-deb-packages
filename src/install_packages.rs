@@ -36,7 +36,7 @@ use tokio_util::io::InspectReader;
 use walkdir::{DirEntry, WalkDir};
 use tempfile::tempdir;
 
-use crate::config::environment::Environment;
+// use crate::config::environment::Environment;
 use crate::config::RequestedPackage;
 use crate::debian::{Distro, MultiarchName, RepositoryPackage};
 use crate::{
@@ -174,11 +174,6 @@ pub(crate) async fn install_packages(
         })
         .collect();    
 
-    // go ahead and read/load the project.toml file
-    let env_file_path = context.app_dir.join("project.toml");
-    let env = Environment::load_from_toml(&env_file_path, &install_layer.path().to_string_lossy());
-    env.apply();
-
    // Define layer_env before using it
    let layer_env = configure_layer_environment(
         &install_layer.path(),
@@ -186,26 +181,11 @@ pub(crate) async fn install_packages(
         &package_env_vars,
         &packages_to_install,
         &skipped_packages,
-        &env,
+        // &env,
     );
 
     install_layer.write_env(layer_env)?;
     rewrite_package_configs(&install_layer.path()).await?;
-
-    // Execute commands after package installation
-    let commands = env.get_commands();
-    for package in &packages_to_install {
-        if let Some(package_commands) = commands.get(&package.name.to_string()) {
-            log = execute_commands_and_log(package_commands, &env.get_variables(), &package.name, log).await;
-        }
-    }
-
-    // Iterate through skipped_packages and execute their commands
-    for skipped_package in &skipped_packages {
-        if let Some(package_commands) = commands.get(&skipped_package.name.to_string()) {
-            log = execute_commands_and_log(package_commands, &env.get_variables(), &skipped_package.name.to_string(), log).await;
-        }
-    }
 
     let mut install_log = log.bullet("Installation complete");
     if is_buildpack_debug_logging_enabled() {
@@ -214,42 +194,6 @@ pub(crate) async fn install_packages(
     log = install_log.done();
 
     Ok(log)
-}
-
-async fn execute_commands_and_log(
-    commands: &[String],
-    env_variables: &HashMap<String, String>,
-    package_name: &str,
-    mut log: Print<Bullet<Stdout>>,
-) -> Print<Bullet<Stdout>> {
-    log = log.h2(format!("Running commands for package: {}", package_name));
-    for command in commands {
-        log = log.bullet(format!("Executing command: {}", command)).done();
-
-        let mut cmd = Command::new("sh");
-        cmd.arg("-c").arg(command);
-        cmd.envs(env_variables);
-
-        let output = cmd.output().expect("Failed to execute command");
-        if output.status.success() {
-            log = log
-                .bullet(format!(
-                    "Command succeeded: {}\nOutput: {}",
-                    command,
-                    String::from_utf8_lossy(&output.stdout)
-                ))
-                .done();
-        } else {
-            log = log
-                .bullet(format!(
-                    "Command failed: {}\nError: {}",
-                    command,
-                    String::from_utf8_lossy(&output.stderr)
-                ))
-                .done();
-        }
-    }
-    log
 }
 
 fn print_layer_contents(
@@ -419,7 +363,6 @@ fn configure_layer_environment(
     package_env_vars: &HashMap<String, HashMap<String, String>>,
     packages_to_install: &[RepositoryPackage],
     skipped_packages: &[RequestedPackage],
-    env: &Environment,
 ) -> LayerEnv {
 
     let mut layer_env = LayerEnv::new();
@@ -473,29 +416,24 @@ fn configure_layer_environment(
 
     // Load the env vars from PACKAGE_ENV_VARS if the package is in the project.toml
     for package in packages_to_install {
-        if env.has_package(package.name.as_str()) {
-            if let Some(vars) = package_env_vars.get(package.name.as_str()) {
-                for (key, value) in vars {
-                    prepend_to_env_var(&mut layer_env, key, vec![value.to_string()]);
-                }
+        // if env.has_package(package.name.as_str()) {
+        if let Some(vars) = package_env_vars.get(package.name.as_str()) {
+            for (key, value) in vars {
+                prepend_to_env_var(&mut layer_env, key, vec![value.to_string()]);
             }
         }
+        // }
     }
 
     // Iterate through skipped_packages and add their environment variables if they are in the project.toml
     for skipped_package in skipped_packages {
-        if env.has_package(skipped_package.name.as_str()) {
-            if let Some(vars) = package_env_vars.get(skipped_package.name.as_str()) {
-                for (key, value) in vars {
-                    prepend_to_env_var(&mut layer_env, key, vec![value.to_string()]);
-                }
+        // if env.has_package(skipped_package.name.as_str()) {
+        if let Some(vars) = package_env_vars.get(skipped_package.name.as_str()) {
+            for (key, value) in vars {
+                prepend_to_env_var(&mut layer_env, key, vec![value.to_string()]);
             }
         }
-    }
-
-    // Apply package-specific environment variables - these are from the project.toml
-    for (key, value) in env.get_variables() {
-        prepend_to_env_var(&mut layer_env, key, vec![value.clone()]);
+        // }
     }
 
     layer_env
@@ -657,7 +595,7 @@ mod test {
     use crate::debian::MultiarchName;
     use crate::install_packages::configure_layer_environment;
     use crate::install_packages::package_env_vars;
-    use crate::config::environment::Environment;
+    // use crate::config::environment::Environment;
     use crate::install_packages::HashMap;
     use crate::config::requested_package::RequestedPackage;
     use crate::debian::repository_package::RepositoryPackage;
@@ -724,25 +662,13 @@ mod test {
                 name: PackageName("package2".to_string()),
                 skip_dependencies: false,
                 force: false,
-                env: None,
-                commands: vec![],
             },
             RequestedPackage {
                 name: PackageName("git".to_string()),
                 skip_dependencies: false,
                 force: false,
-                env: None,
-                commands: vec![],
             },
         ];
-
-        // Create a dummy environment
-        let temp_dir = TempDir::new().unwrap();
-        let env_file_path = temp_dir.path().join("project.toml");
-        let mut env_file = File::create(&env_file_path).unwrap();
-        writeln!(env_file, "{}", toml).unwrap();
-        let env = Environment::load_from_toml(&env_file_path, &install_path.to_string_lossy());
-        env.apply();
 
         let layer_env = configure_layer_environment(
             &install_path,
@@ -750,7 +676,7 @@ mod test {
             &package_env_vars,
             &packages_to_install,
             &skipped_packages,
-            &env,
+            // &env,
         );        
 
         // Get the actual and expected values for LD_LIBRARY_PATH
@@ -785,7 +711,7 @@ mod test {
             applied_env.get("VAR3"),
             Some(&OsString::from(format!("{}/usr/bin", install_dir_str)))
         );
-    }
+    }    
 
     #[test]
     fn configure_layer_environment_adds_nested_directories_with_headers_to_include_path() {
@@ -829,14 +755,7 @@ mod test {
             name: PackageName("package2".to_string()),
             skip_dependencies: false,
             force: false,
-            env: None,
-            commands: vec![],
         }];
-
-        // Create a dummy environment
-        let env_file_path = TempDir::new().unwrap().path().join("project.toml");
-        let env = Environment::load_from_toml(&env_file_path, &install_path.to_string_lossy());
-        env.apply();
 
         let layer_env = configure_layer_environment(
             &install_path,
@@ -844,7 +763,7 @@ mod test {
             &package_env_vars,
             &packages_to_install,
             &skipped_packages,
-            &env,
+            // &env,
         );
 
         assert_eq!(
@@ -857,7 +776,7 @@ mod test {
                 install_path.join("usr/include"),
             ]
         );
-    }
+    }    
 
     fn create_installation(files: Vec<String>) -> TempDir {
         let install_dir = tempfile::tempdir().unwrap();
@@ -883,98 +802,5 @@ mod test {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default()
-    }
-}
-
-mod tests {
-    use bullet_stream::Print;
-    use std::path::PathBuf;
-    use std::io::stdout;
-    // use std::collections::HashMap;
-    use tempfile::tempdir;
-    use crate::debian::RepositoryUri;
-    use super::*;
-
-    #[tokio::test]
-    async fn test_run_commands_after_install() {
-        // Create a temporary directory for testing
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("testfile");
-
-        // Simulated packages to install
-        let packages_to_install = vec![
-            RepositoryPackage {
-                name: "testpackage".to_string(),
-                version: "1.0.0".to_string(),
-                filename: "testpackage.deb".to_string(),
-                repository_uri: RepositoryUri::from("http://example.com"),
-                sha256sum: "".to_string(),
-                depends: None,
-                pre_depends: None,
-                provides: None,
-            }
-        ];
-
-        // Simulated environment configuration
-        let env = Environment::new(
-            HashMap::new(),
-            HashMap::from([
-                ("testpackage".to_string(), vec![
-                    format!("touch {}", file_path.display()),
-                    format!("echo 'Hello, world!' > {}", file_path.display())
-                ])
-            ])
-        );
-
-        // Simulated log
-        let mut log = Print::new(stdout()).h2("Running commands");
-
-        // Execute commands after package installation
-        for package in &packages_to_install {
-            if let Some(package_commands) = env.get_commands().get(&package.name) {
-                log = execute_commands_and_log(package_commands, &env.get_variables(), &package.name, log).await;
-            }
-        }
-
-        // Verify that the file was created and contains the expected content
-        let content = std::fs::read_to_string(file_path).expect("Failed to read file");
-        assert_eq!(content, "Hello, world!\n");
-    }
-
-    #[test]
-    fn test_package_specific_env_vars() {
-
-        let install_dir = tempdir().unwrap(); 
-
-        // Simulate the expected environment variables for the git package
-        let mut layer_env = LayerEnv::new();
-        let package_env_vars = package_env_vars();
-
-        // Simulated environment configuration
-        let env = Environment::new(
-            HashMap::new(),
-            HashMap::from([
-                // Simulate that the `git` package is present in project.toml
-                ("git".to_string(), vec![])
-            ])
-        );
-
-        // Apply package-specific environment variables if the package is in project.toml
-        if env.has_package("git") {
-            if let Some(vars) = package_env_vars.get("git") {
-                for (key, value) in vars {
-                    prepend_to_env_var(&mut layer_env, key, vec![value.to_string()]);
-                }
-            }
-        }
-
-        assert_eq!(
-            layer_env.apply_to_empty(Scope::All).get("GIT_EXEC_PATH"),
-            Some(&OsString::from("{install_dir}/usr/lib/git-core"))
-        );
-        assert_eq!(
-            layer_env.apply_to_empty(Scope::All).get("GIT_TEMPLATE_DIR"),
-            Some(&OsString::from("{install_dir}/usr/share/git-core/templates"))
-        );
     }
 }
