@@ -1,5 +1,4 @@
 use std::str::FromStr;
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 use toml_edit::{Formatted, InlineTable, Value};

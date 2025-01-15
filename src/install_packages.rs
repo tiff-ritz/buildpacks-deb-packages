@@ -1,14 +1,11 @@
 use std::collections::HashMap;
 use std::env::temp_dir;
 use std::ffi::OsString;
-use std::fs;
 use std::fs::File;
 use std::io::{ErrorKind, Stdout, Write};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use toml_edit::DocumentMut;
-use std::process::Command;
 
 use ar::Archive as ArArchive;
 use async_compression::tokio::bufread::{GzipDecoder, XzDecoder, ZstdDecoder};
@@ -34,7 +31,7 @@ use tokio_tar::Archive as TarArchive;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 use tokio_util::io::InspectReader;
 use walkdir::{DirEntry, WalkDir};
-use tempfile::tempdir;
+// use tempfile::tempdir;
 
 // use crate::config::environment::Environment;
 use crate::config::RequestedPackage;
@@ -416,24 +413,20 @@ fn configure_layer_environment(
 
     // Load the env vars from PACKAGE_ENV_VARS if the package is in the project.toml
     for package in packages_to_install {
-        // if env.has_package(package.name.as_str()) {
         if let Some(vars) = package_env_vars.get(package.name.as_str()) {
             for (key, value) in vars {
                 prepend_to_env_var(&mut layer_env, key, vec![value.to_string()]);
             }
         }
-        // }
     }
 
     // Iterate through skipped_packages and add their environment variables if they are in the project.toml
     for skipped_package in skipped_packages {
-        // if env.has_package(skipped_package.name.as_str()) {
         if let Some(vars) = package_env_vars.get(skipped_package.name.as_str()) {
             for (key, value) in vars {
                 prepend_to_env_var(&mut layer_env, key, vec![value.to_string()]);
             }
         }
-        // }
     }
 
     layer_env
@@ -582,6 +575,7 @@ struct InstallationMetadata {
 
 #[cfg(test)]
 mod test {
+    // use super::PACKAGE_ENV_VARS; 
     use libcnb::layer_env::Scope;
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
@@ -593,8 +587,7 @@ mod test {
     use tempfile::TempDir;
 
     use crate::debian::MultiarchName;
-    use crate::install_packages::configure_layer_environment;
-    use crate::install_packages::package_env_vars;
+    use crate::install_packages::{configure_layer_environment, package_env_vars};
     // use crate::config::environment::Environment;
     use crate::install_packages::HashMap;
     use crate::config::requested_package::RequestedPackage;
@@ -626,11 +619,8 @@ mod test {
         // Convert package_env_vars to the correct type and replace {install_dir} with the actual path
         let install_dir_str = install_path.to_string_lossy().to_string();
 
-        let initial_package_env_vars: HashMap<String, HashMap<String, String>> = vec![
-            ("ghostscript".to_string(), vec![("VAR1".to_string(), "{install_dir}/usr/bin".to_string())].into_iter().collect()),
-            ("package2".to_string(), vec![("VAR2".to_string(), "{install_dir}/usr/lib".to_string())].into_iter().collect()),
-            ("git".to_string(), vec![("VAR3".to_string(), "{install_dir}/usr/bin".to_string())].into_iter().collect()),
-        ].into_iter().collect();
+        let initial_package_env_vars = package_env_vars();
+        println!("initial_package_env_vars: {:?}", initial_package_env_vars);        
 
         let package_env_vars: HashMap<String, HashMap<String, String>> = initial_package_env_vars
             .into_iter()
@@ -643,7 +633,7 @@ mod test {
                 )
             })
             .collect();        
-
+        println!("Package env vars: {:?}", package_env_vars);
 
         // Create dummy packages to install and skipped packages
         let packages_to_install = vec![RepositoryPackage {
@@ -676,7 +666,6 @@ mod test {
             &package_env_vars,
             &packages_to_install,
             &skipped_packages,
-            // &env,
         );        
 
         // Get the actual and expected values for LD_LIBRARY_PATH
@@ -700,16 +689,16 @@ mod test {
         let applied_env = layer_env.apply_to_empty(Scope::All);
 
         assert_eq!(
-            applied_env.get("VAR1"),
-            Some(&OsString::from(format!("{}/usr/bin", install_dir_str)))
+            applied_env.get("GIT_EXEC_PATH"),
+            Some(&OsString::from(format!("{}/usr/lib/git-core", install_dir_str)))
         );
         assert_eq!(
-            applied_env.get("VAR2"),
-            Some(&OsString::from(format!("{}/usr/lib", install_dir_str)))
+            applied_env.get("GIT_TEMPLATE_DIR"),
+            Some(&OsString::from(format!("{}/usr/share/git-core/templates", install_dir_str)))
         );
         assert_eq!(
-            applied_env.get("VAR3"),
-            Some(&OsString::from(format!("{}/usr/bin", install_dir_str)))
+            applied_env.get("GS_LIB"),
+            Some(&OsString::from(format!("{}/var/lib/ghostscript", install_dir_str)))
         );
     }    
 
@@ -727,7 +716,10 @@ mod test {
 
         // Convert package_env_vars to the correct type and replace {install_dir} with the actual path
         let install_dir_str = install_path.to_string_lossy().to_string();
-        let package_env_vars: HashMap<String, HashMap<String, String>> = package_env_vars()
+        let initial_package_env_vars = package_env_vars();
+        println!("initial_package_env_vars: {:?}", initial_package_env_vars);        
+
+        let package_env_vars: HashMap<String, HashMap<String, String>> = initial_package_env_vars
             .into_iter()
             .map(|(k, v)| {
                 (
@@ -763,7 +755,6 @@ mod test {
             &package_env_vars,
             &packages_to_install,
             &skipped_packages,
-            // &env,
         );
 
         assert_eq!(
