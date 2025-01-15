@@ -3,7 +3,18 @@ schema-version = "0.2"
 
 [com.heroku.buildpacks.deb-packages]
 install = [
-    { name = "git", env = {"GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates"}, commands = ["echo 'Git installed successfully'", "git --version"]},
-    { name = "babeld" },
-    { name = "ghostscript", skip_dependencies = true, force = true, env = {"GS_LIB" = "{install_dir}/var/lib/ghostscript"}, commands = ["echo 'Ghostscript installed successfully'", "gs --version"]},
+  # basic package with some dependencies
+  "libgwenhywfar79",
+  # child package of "libgwenhywfar79" so we should get a warning that it was already installed by the previous entry
+  "libgwenhywfar-data",
+  # package with child dependencies skipped so no "libxmlsec1" or "libxmlsec1-openssl" will be installed
+  { name = "xmlsec1", skip_dependencies = true },
+  # a package already installed on the system
+  "wget",
+  # libvips is a virtual package which is only provided by libvips42 so no need to halt and ask the user which implementing package to install
+  "libvips",
+  # curl is already on the system so we're going to force it to be installed
+  { name = "curl", force = true },
+  # git needs to have environment variables set and post installation commands run
+  { name = "git", env = {"GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates"}, commands = ["echo 'Git installed successfully'", "git --version"]},
 ]

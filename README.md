@@ -51,24 +51,12 @@ The configuration for this buildpack must be added to the project descriptor fil
 project using the `com.heroku.buildpacks.deb-packages` table. The list of packages to install must be
 specified there. See below for the [configuration schema](#schema) and an [example](#example).
 
-### Configuring Environment Variables
-
-You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.  There can be more than one environment variable defined for each package.
-
-During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual paths so the variables are available at both `build` and `launch` phases using [layer environment variables][cnb-environment].
-
 ### Default Package Environment Variables
 The buildpack includes a set of default environment variables for each package, known as `PACKAGE_ENV_VARS`. These default environment variables are applied during the build process. However, you can override these default values by specifying environment variables in the project.toml file.
 
-If a package is listed in the project.toml file with environment variables under the env key, those variables will take precedence over the default `PACKAGE_ENV_VARS`.
-
-### Executing Commands After Package Installation
-
-You can specify commands to be executed after the installation of each package by defining them in the project.toml file under the commands key for each package. These commands will be executed in the order they are listed.
-
 ## Environment Variables and Post-Install Commands for Skipped Packages
 
-Even if a package is skipped, the environment variables and post-install commands defined for that package will still be applied and executed. This ensures that any necessary configuration or setup steps are performed, even if the package itself is not installed.
+Even if a package is skipped, the environment variables will still be applied. This ensures that any necessary configuration or setup steps are performed, even if the package itself is not installed.
 
 #### Example
 
@@ -92,8 +80,6 @@ install = [
   "libvips",
   # curl is already on the system so we're going to force it to be installed
   { name = "curl", force = true },
-  # git needs to have environment variables set and post installation commands run
-  { name = "git", env = {"GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates"}, commands = ["echo 'Git installed successfully'", "git --version"]},
 ]
 ```
 
@@ -125,14 +111,6 @@ install = [
             - `force` *__([boolean][toml-boolean], optional, default = false)__*
 
               If set to `true`, the package will be installed even if it's already installed on the system.
-
-            - `env` *__([inline-table][toml-inline-table], optional, default={})__*
-
-              A table of environment variables to set for the package. The keys are the variable names and the values are the variable values. The `{build_dir}` placeholder can be used in the values and will be replaced with the actual build directory path.
-
-            - `commands` *__([array][toml-array], optional, default=[])__*
-
-              A list of commands to execute after the package is installed. The commands will be executed in the order they are listed.
 
 > [!TIP]
 > Users of the [heroku-community/apt][classic-apt-buildpack] can migrate their Aptfile to the above configuration by
