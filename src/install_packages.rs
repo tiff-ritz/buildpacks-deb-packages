@@ -86,7 +86,8 @@ pub(crate) async fn install_packages(
             invalid_metadata_action: &|_| InvalidMetadataAction::DeleteLayer,
             restored_layer_action: &|old_metadata: &InstallationMetadata, _| {
                 if old_metadata == &new_metadata {
-                    RestoredLayerAction::KeepLayer
+                    // RestoredLayerAction::KeepLayer
+                    RestoredLayerAction::DeleteLayer
                 } else {
                     RestoredLayerAction::DeleteLayer
                 }
@@ -302,13 +303,14 @@ async fn download(
 async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult<()> {
     // a .deb file is an ar archive
     // https://manpages.ubuntu.com/manpages/jammy/en/man5/deb.5.html
-    let mut debian_archive = File::open(&download_path)
-        .map_err(|e| InstallPackagesError::OpenPackageArchive(download_path.clone(), e))
-        .map(ArArchive::new)?;
+    let mut debian_archive = File::open(&download_path).map_err(|e| {
+        InstallPackagesError::OpenPackageArchive(download_path.clone(), e)
+    }).map(ArArchive::new)?;    
 
     while let Some(entry) = debian_archive.next_entry() {
-        let entry = entry
-            .map_err(|e| InstallPackagesError::OpenPackageArchiveEntry(download_path.clone(), e))?;
+        let entry = entry.map_err(|e| {
+            InstallPackagesError::OpenPackageArchiveEntry(download_path.clone(), e)
+        })?;        
         let entry_path = PathBuf::from(OsString::from_vec(entry.header().identifier().to_vec()));
         let entry_reader =
             AsyncBufReader::new(FuturesAsyncReadCompatExt::compat(AllowStdIo::new(entry)));
@@ -320,24 +322,24 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
         ) {
             (Some("data.tar"), Some("gz")) => {
                 let mut tar_archive = TarArchive::new(GzipDecoder::new(entry_reader));
-                tar_archive
-                    .unpack(&output_dir)
-                    .await
-                    .map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                tar_archive.unpack(&output_dir).await.map_err(|e| {
+                    println!("Failed to unpack gzipped tar archive: {:?}", e);
+                    InstallPackagesError::UnpackTarball(download_path.clone(), e)
+                })?;
             }
             (Some("data.tar"), Some("zstd" | "zst")) => {
                 let mut tar_archive = TarArchive::new(ZstdDecoder::new(entry_reader));
-                tar_archive
-                    .unpack(&output_dir)
-                    .await
-                    .map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                tar_archive.unpack(&output_dir).await.map_err(|e| {
+                    println!("Failed to unpack zstd compressed tar archive: {:?}", e);
+                    InstallPackagesError::UnpackTarball(download_path.clone(), e)
+                })?;
             }
             (Some("data.tar"), Some("xz")) => {
                 let mut tar_archive = TarArchive::new(XzDecoder::new(entry_reader));
-                tar_archive
-                    .unpack(&output_dir)
-                    .await
-                    .map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                tar_archive.unpack(&output_dir).await.map_err(|e| {
+                    println!("Failed to unpack xz compressed tar archive: {:?}", e);
+                    InstallPackagesError::UnpackTarball(download_path.clone(), e)
+                })?;
             }
             (Some("data.tar"), Some(compression)) => {
                 Err(InstallPackagesError::UnsupportedCompression(
@@ -346,12 +348,12 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                 ))?;
             }
             _ => {
-                // ignore other potential file entries (e.g.; debian-binary, control.tar)
+                // ignore other potential file entries (e.g., debian-binary, control.tar)
             }
         };
     }
 
-    Ok(())
+    Ok(())        
 }
 
 fn configure_layer_environment(
@@ -575,7 +577,6 @@ struct InstallationMetadata {
 
 #[cfg(test)]
 mod test {
-    // use super::PACKAGE_ENV_VARS; 
     use libcnb::layer_env::Scope;
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
