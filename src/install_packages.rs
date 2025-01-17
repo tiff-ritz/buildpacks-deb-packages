@@ -6,13 +6,18 @@ use std::io::{ErrorKind, Stdout, Write};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::process::Command;
+use std::os::unix::fs::PermissionsExt;
+use std::fs;
 
 use ar::Archive as ArArchive;
 use async_compression::tokio::bufread::{GzipDecoder, XzDecoder, ZstdDecoder};
 use bullet_stream::state::{Bullet, SubBullet};
 use bullet_stream::{style, Print};
 use futures::io::AllowStdIo;
+use futures::stream::StreamExt;
 use futures::TryStreamExt;
+use futures::AsyncReadExt;
 use indexmap::IndexSet;
 use libcnb::build::BuildContext;
 use libcnb::data::layer_name;
@@ -33,7 +38,6 @@ use tokio_util::io::InspectReader;
 use walkdir::{DirEntry, WalkDir};
 // use tempfile::tempdir;
 
-// use crate::config::environment::Environment;
 use crate::config::RequestedPackage;
 use crate::debian::{Distro, MultiarchName, RepositoryPackage};
 use crate::{
@@ -141,10 +145,12 @@ pub(crate) async fn install_packages(
             let mut download_and_extract_handles = JoinSet::new();
 
             for repository_package in &packages_to_install {
+                let sub_log = log.bullet("Downloading and extracting");
                 download_and_extract_handles.spawn(download_and_extract(
                     client.clone(),
                     repository_package.clone(),
                     install_layer.path(),
+                    sub_log,
                 ));
             }
 
@@ -223,15 +229,20 @@ async fn download_and_extract(
     client: ClientWithMiddleware,
     repository_package: RepositoryPackage,
     install_dir: PathBuf,
+    log: Print<SubBullet<Stdout>>, 
 ) -> BuildpackResult<()> {
-    let download_path = download(client, &repository_package).await?;
+    let (download_path, download_url) = download(client, &repository_package).await?;
+
+    // Extract the control file and analyze for postinst script
+    extract_control_file(&download_path, &repository_package, &download_url, log).await?;
+
     extract(download_path, install_dir).await
 }
 
 async fn download(
     client: ClientWithMiddleware,
     repository_package: &RepositoryPackage,
-) -> BuildpackResult<PathBuf> {
+) -> BuildpackResult<(PathBuf, String)> {
     let download_url = build_download_url(repository_package);
 
     let download_file_name = PathBuf::from(repository_package.filename.as_str())
@@ -290,14 +301,14 @@ async fn download(
     let hash = repository_package.sha256sum.to_string();
 
     if hash != calculated_hash {
-        Err(InstallPackagesError::ChecksumFailed {
-            url: download_url,
+        return Err(InstallPackagesError::ChecksumFailed {
+            url: download_url.clone(),
             expected: hash,
             actual: calculated_hash,
         })?;
     }
 
-    Ok(download_path)
+    Ok((download_path, download_url))
 }
 
 async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult<()> {
@@ -354,6 +365,76 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
     }
 
     Ok(())        
+}
+
+async fn extract_control_file(
+    download_path: &PathBuf,
+    repository_package: &RepositoryPackage,
+    download_url: &str,
+    log: Print<SubBullet<Stdout>>,
+) -> BuildpackResult<()> {
+    let file = File::open(download_path)
+        .map_err(|e| InstallPackagesError::OpenPackage(download_path.clone(), e))?;
+    let mut debian_archive = ArArchive::new(AsyncBufReader::new(file));
+
+    while let Some(entry) = debian_archive.next_entry().await {
+        let entry = entry
+            .map_err(|e| InstallPackagesError::OpenPackageArchiveEntry(download_path.clone(), e))?;
+        let entry_path = PathBuf::from(OsString::from_vec(entry.header().identifier().to_vec()));
+        let entry_reader =
+            AsyncBufReader::new(FuturesAsyncReadCompatExt::compat(AllowStdIo::new(entry)));
+
+        // Debug logging for entry path
+        println!("Extracting entry: {:?}", entry_path);
+
+        if entry_path.to_string_lossy().contains("control.tar") {
+            let mut control_archive = TarArchive::new(GzipDecoder::new(entry_reader));
+            while let Some(control_entry) = control_archive.next_entry().await {
+                let control_entry = control_entry.map_err(|e| InstallPackagesError::OpenPackageArchiveEntry(download_path.to_path_buf(), e))?;
+                let control_entry_path = PathBuf::from(OsString::from_vec(control_entry.header().path().unwrap().as_bytes().to_vec()));
+
+                if control_entry_path.to_string_lossy().contains("postinst") {
+                    // Save postinst script to a temporary file
+                    let temp_postinst_path = std::env::temp_dir().join("postinst.sh");
+                    let mut postinst_script = fs::File::create(&temp_postinst_path)
+                        .map_err(|e| InstallPackagesError::WritePackage(
+                            repository_package.clone(),
+                            download_url.to_string(),
+                            temp_postinst_path.clone(),
+                            e,
+                        ))?;
+                    
+                    let mut buffer = String::new();
+                    control_entry
+                        .take(1024 * 1024) // limit to 1MB to avoid huge scripts
+                        .read_to_string(&mut buffer)
+                        .map_err(|e| InstallPackagesError::ReadPostinstScript(control_entry_path.clone(), e))?;
+                    
+                    postinst_script.write_all(buffer.as_bytes())
+                        .map_err(|e| InstallPackagesError::WritePostinstScript(temp_postinst_path.clone(), e))?;
+
+                    // Make the postinst script executable
+                    let mut permissions = fs::metadata(&temp_postinst_path)?.permissions();
+                    permissions.set_mode(0o755);
+                    fs::set_permissions(&temp_postinst_path, permissions)?;
+
+                    // Execute the postinst script
+                    let output = Command::new("sh")
+                        .arg(&temp_postinst_path)
+                        .output()
+                        .expect("Failed to execute postinst script");
+
+                    if output.status.success() {
+                        log.sub_bullet(format!("Executed postinst script for {}: {}", download_path.display(), String::from_utf8_lossy(&output.stdout)));
+                    } else {
+                        log.sub_bullet(format!("Failed to execute postinst script for {}: {}", download_path.display(), String::from_utf8_lossy(&output.stderr)));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn configure_layer_environment(
@@ -546,6 +627,9 @@ fn build_download_url(repository_package: &RepositoryPackage) -> String {
 
 #[derive(Debug)]
 pub(crate) enum InstallPackagesError {
+    OpenPackage(PathBuf, std::io::Error),
+    ReadPostinstScript(PathBuf, std::io::Error),
+    WritePostinstScript(PathBuf, std::io::Error),
     TaskFailed(JoinError),
     InvalidFilename(String, String),
     RequestPackage(RepositoryPackage, reqwest_middleware::Error),
