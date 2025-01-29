@@ -743,6 +743,29 @@ fn on_install_packages_error(error: InstallPackagesError) -> ErrorMessage {
                 .debug_info(e.to_string())
                 .call()
         }
+
+        InstallPackagesError::SetPermissions(file, e) => {
+            let file = file_value(file);
+            create_error()
+                .error_type(Internal)
+                .header("Failed to set permissions for postinst script")
+                .body(formatdoc! {
+                    "An unexpected I/O error occurred while setting permissions for the postinst script at {file}."
+                })
+                .debug_info(e.to_string())
+                .call()
+        }
+
+        InstallPackagesError::ExecutePostinstScript(e) => {
+            create_error()
+                .error_type(Internal)
+                .header("Failed to execute postinst script")
+                .body(formatdoc! {
+                    "An error occurred while trying to execute the postinst script."
+                })
+                .debug_info(e.to_string())
+                .call()
+        }        
     }
 }
 

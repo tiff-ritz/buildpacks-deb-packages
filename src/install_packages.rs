@@ -1,18 +1,21 @@
 use std::collections::HashMap;
 use std::env::temp_dir;
 use std::ffi::OsString;
-use std::fs::File;
+use std::fs::{File, Permissions};
 use std::io::{ErrorKind, Stdout, Write};
 use std::os::unix::ffi::OsStringExt;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::process::Command as StdCommand;
 use std::sync::Arc;
 
 use ar::Archive as ArArchive;
 use async_compression::tokio::bufread::{GzipDecoder, XzDecoder, ZstdDecoder};
 use bullet_stream::state::{Bullet, SubBullet};
 use bullet_stream::{style, Print};
+use futures::StreamExt;
 use futures::io::AllowStdIo;
-use futures::TryStreamExt;
+use futures::{AsyncRead, TryStreamExt};
 use indexmap::IndexSet;
 use libcnb::build::BuildContext;
 use libcnb::data::layer_name;
@@ -24,8 +27,9 @@ use reqwest_middleware::ClientWithMiddleware;
 use reqwest_middleware::Error::Reqwest;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tokio::fs::{read_to_string as async_read_to_string, write as async_write, File as AsyncFile};
-use tokio::io::{copy as async_copy, BufReader as AsyncBufReader, BufWriter as AsyncBufWriter};
+use tokio::fs::{read_to_string as async_read_to_string, write as async_write, File as AsyncFile, set_permissions};
+use tokio::io::{copy as async_copy, BufReader as AsyncBufReader, BufWriter as AsyncBufWriter, AsyncRead as TokioAsyncRead};
+use tokio::process::Command;
 use tokio::task::{JoinError, JoinSet};
 use tokio_tar::Archive as TarArchive;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
@@ -307,6 +311,8 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
         InstallPackagesError::OpenPackageArchive(download_path.clone(), e)
     }).map(ArArchive::new)?;    
 
+    let mut postinst_script_path: Option<PathBuf> = None;
+
     while let Some(entry) = debian_archive.next_entry() {
         let entry = entry.map_err(|e| {
             InstallPackagesError::OpenPackageArchiveEntry(download_path.clone(), e)
@@ -347,10 +353,79 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                     compression.to_string(),
                 ))?;
             }
+            (Some("control.tar"), Some("gz")) => {
+                let mut tar_archive = TarArchive::new(GzipDecoder::new(entry_reader));
+                let mut entries = tar_archive.entries().map_err(
+                    |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                while let Some(mut entry) = entries.next().await {
+                    let mut entry = entry.map_err(
+                        |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                    if entry.path().map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?.ends_with("postinst") {
+                        let mut postinst_path = output_dir.clone();
+                        postinst_path.push(entry.path().map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?);
+                        async_copy(&mut entry, &mut AsyncFile::create(&postinst_path).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                        postinst_script_path = Some(postinst_path);
+                    }                
+                }
+            }
+            (Some("control.tar"), Some("zstd" | "zst")) => {
+                let mut tar_archive = TarArchive::new(ZstdDecoder::new(entry_reader));
+                let mut entries = tar_archive.entries().map_err(
+                    |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                while let Some(mut entry) = entries.next().await {
+                    let mut entry = entry.map_err(
+                        |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                    if entry.path().map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?.ends_with("postinst") {
+                        let mut postinst_path = output_dir.clone();
+                        postinst_path.push(entry.path().map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?);
+                        async_copy(&mut entry, &mut AsyncFile::create(&postinst_path).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                        postinst_script_path = Some(postinst_path);
+                    }                
+                }
+            }
+            (Some("control.tar"), Some("xz")) => {
+                let mut tar_archive = TarArchive::new(XzDecoder::new(entry_reader));
+                let mut entries = tar_archive.entries().map_err(
+                    |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                while let Some(mut entry) = entries.next().await {
+                    let mut entry = entry.map_err(
+                        |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                    if entry.path().map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?.ends_with("postinst") {
+                        let mut postinst_path = output_dir.clone();
+                        postinst_path.push(entry.path().map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?);
+                        async_copy(&mut entry, &mut AsyncFile::create(&postinst_path).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
+                        postinst_script_path = Some(postinst_path);
+                    }                
+                }
+            }            
+            (Some("control.tar"), Some(compression)) => {
+                Err(InstallPackagesError::UnsupportedCompression(
+                    download_path.clone(),
+                    compression.to_string(),
+                ))?;
+            }            
             _ => {
-                // ignore other potential file entries (e.g., debian-binary, control.tar)
+                // ignore other potential file entries (e.g., debian-binary)
             }
         };
+    }
+
+    if let Some(postinst_path) = postinst_script_path {
+        // Log the execution of the postinst script
+        println!("Executing postinst script at {:?}", postinst_path);
+
+        // Make the postinst script executable
+        set_permissions(&postinst_path, PermissionsExt::from_mode(0o755)).await
+            .map_err(|e| InstallPackagesError::SetPermissions(postinst_path.clone(), e))?;
+
+        // Run the postinst script
+        let output = Command::new(postinst_path)
+            .output()
+            .await
+            .map_err(|e| InstallPackagesError::ExecutePostinstScript(e))?;
+
+        // Log the output of the postinst script
+        println!("Postinst script output: {:?}", output);
     }
 
     Ok(())        
@@ -561,6 +636,8 @@ pub(crate) enum InstallPackagesError {
     UnsupportedCompression(PathBuf, String),
     ReadPackageConfig(PathBuf, std::io::Error),
     WritePackageConfig(PathBuf, std::io::Error),
+    SetPermissions(PathBuf, std::io::Error),
+    ExecutePostinstScript(std::io::Error),
 }
 
 impl From<InstallPackagesError> for libcnb::Error<DebianPackagesBuildpackError> {
