@@ -313,7 +313,6 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
         println!("Failed to open package archive: {:?}", e);
         InstallPackagesError::OpenPackageArchive(download_path.clone(), e)
     }).map(ArArchive::new)?;    
-    println!("Opened package archive");    
 
     let mut postinst_script_path: Option<PathBuf> = None;
 
@@ -323,7 +322,6 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
             InstallPackagesError::OpenPackageArchiveEntry(download_path.clone(), e)
         })?;        
         let entry_path = PathBuf::from(OsString::from_vec(entry.header().identifier().to_vec()));
-        println!("Processing entry: {:?}", entry_path);
         let entry_reader =
             AsyncBufReader::new(FuturesAsyncReadCompatExt::compat(AllowStdIo::new(entry)));
 
@@ -333,31 +331,25 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
             entry_path.extension().and_then(|v| v.to_str()),
         ) {
             (Some("data.tar"), Some("gz")) => {
-                println!("Found gzipped data.tar entry");                
                 let mut tar_archive = TarArchive::new(GzipDecoder::new(entry_reader));
                 tar_archive.unpack(&output_dir).await.map_err(|e| {
                     println!("Failed to unpack gzipped tar archive: {:?}", e);
                     InstallPackagesError::UnpackTarball(download_path.clone(), e)
                 })?;
-                println!("Unpacked gzipped data.tar entry");                
             }
             (Some("data.tar"), Some("zstd" | "zst")) => {
-                println!("Found zstd compressed data.tar entry");                
                 let mut tar_archive = TarArchive::new(ZstdDecoder::new(entry_reader));
                 tar_archive.unpack(&output_dir).await.map_err(|e| {
                     println!("Failed to unpack zstd compressed tar archive: {:?}", e);
                     InstallPackagesError::UnpackTarball(download_path.clone(), e)
                 })?;
-                println!("Unpacked zstd compressed data.tar entry");                
             }
             (Some("data.tar"), Some("xz")) => {
-                println!("Found xy compressed data.tar entry");                
                 let mut tar_archive = TarArchive::new(XzDecoder::new(entry_reader));
                 tar_archive.unpack(&output_dir).await.map_err(|e| {
                     println!("Failed to unpack xz compressed tar archive: {:?}", e);
                     InstallPackagesError::UnpackTarball(download_path.clone(), e)
                 })?;
-                println!("Unpacked xy compressed data.tar entry");                
             }
             (Some("data.tar"), Some(compression)) => {
                 println!("Unknown compression data.tar entry");                
@@ -367,7 +359,6 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                 ))?;
             }
             (Some("control.tar"), Some("gz")) => {
-                println!("Found gzipped control.tar entry");                
                 let mut tar_archive = TarArchive::new(GzipDecoder::new(entry_reader));
                 let mut entries = tar_archive.entries().map_err(
                     |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
@@ -376,7 +367,6 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                         |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
                     let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
-                    println!("Processing entry: {:?}", entry_path);                        
                     if entry_path.ends_with("postinst") {
                         println!("Found postinst script: {:?}", entry_path);
                         let mut postinst_path = output_dir.clone();
@@ -390,7 +380,6 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                 }
             }
             (Some("control.tar"), Some("zstd" | "zst")) => {
-                println!("Found zstd control.tar entry");                
                 let mut tar_archive = TarArchive::new(ZstdDecoder::new(entry_reader));
                 let mut entries = tar_archive.entries().map_err(
                     |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
@@ -399,7 +388,6 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                         |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
                     let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
-                    println!("Processing entry: {:?}", entry_path);                        
                     if entry_path.ends_with("postinst") {
                         println!("Found postinst script: {:?}", entry_path);
                         let mut postinst_path = output_dir.clone();
@@ -413,7 +401,6 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                 }
             }
             (Some("control.tar"), Some("xz")) => {
-                println!("Found xy control.tar entry");                
                 let mut tar_archive = TarArchive::new(XzDecoder::new(entry_reader));
                 let mut entries = tar_archive.entries().map_err(
                     |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
@@ -422,7 +409,6 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                         |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
                     let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
-                    println!("Processing entry: {:?}", entry_path);                        
                     if entry_path.ends_with("postinst") {
                         println!("Found postinst script: {:?}", entry_path);
                         let mut postinst_path = output_dir.clone();
