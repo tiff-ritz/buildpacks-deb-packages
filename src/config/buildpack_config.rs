@@ -108,7 +108,6 @@ impl From<ConfigError> for libcnb::Error<DebianPackagesBuildpackError> {
 #[cfg(test)]
 mod test {
     use crate::debian::PackageName;
-    use std::collections::HashMap;
     use indexmap::IndexSet;
     use std::str::FromStr;
 

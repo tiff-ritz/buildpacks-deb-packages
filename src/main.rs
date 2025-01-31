@@ -126,8 +126,8 @@ impl Buildpack for DebianPackagesBuildpack {
             determine_packages_to_install(&package_index, config.install, log)?;
         
         // show more info on the packages to install
-        println!("packages_to_install: {:?}", packages_to_install);
-        println!("skipped_packages: {:?}", skipped_packages);
+        // println!("packages_to_install: {:?}", packages_to_install);
+        // println!("skipped_packages: {:?}", skipped_packages);
 
         for package in &packages_to_install {
             if let Some(provides) = &package.provides {
