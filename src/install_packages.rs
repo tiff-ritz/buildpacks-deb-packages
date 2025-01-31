@@ -304,9 +304,6 @@ async fn download(
 }
 
 async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult<()> {
-    println!("Download path: {:?}", download_path);
-    println!("Output directory: {:?}", output_dir);
-
     // a .deb file is an ar archive
     // https://manpages.ubuntu.com/manpages/jammy/en/man5/deb.5.html
     let mut debian_archive = File::open(&download_path).map_err(|e| {
