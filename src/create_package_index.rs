@@ -69,6 +69,13 @@ pub(crate) async fn create_package_index(
     let updated_sources = update_sources(context, client, &distro.get_source_list()).await?;
     let log = timer.done();
 
+    // Clean up old package indexes
+    for updated_source in &updated_sources {
+        for updated_package_index in &updated_source.package_indexes {
+            clean_up_old_indexes(context, &updated_package_index.metadata)?;
+        }
+    }
+
     let log = updated_sources
         .iter()
         .fold(log, |log, updated_source| {
@@ -135,6 +142,22 @@ pub(crate) async fn create_package_index(
         .done();
 
     Ok((package_index, log))
+}
+
+fn clean_up_old_indexes(
+    context: &Arc<BuildContext<DebianPackagesBuildpack>>,
+    current_metadata: &PackageIndexMetadata,
+) -> BuildpackResult<()> {
+    let layers = context.list_layers()?;
+    for layer in layers {
+        if let Some(metadata) = context.read_layer_metadata::<PackageIndexMetadata>(&layer)? {
+            if metadata.hash != current_metadata.hash {
+                // If the layer contains outdated package indexes, delete it
+                context.remove_layer(layer)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn update_sources(
@@ -287,7 +310,8 @@ async fn get_release(
                 None
             }
         }),
-    };
+        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(), // Adding the timestamp here
+    };        
 
     let release_file_layer = context.cached_layer(
         layer_name,
@@ -382,9 +406,11 @@ async fn get_package_list(
     let layer_name = LayerName::from_str(&format!("{:x}", Sha256::digest(&package_index_url)))
         .map_err(|e| CreatePackageIndexError::InvalidLayerName(package_index_url.clone(), e))?;
 
+    // Create new metadata with a timestamp
     let new_metadata = PackageIndexMetadata {
         hash: hash.to_string(),
-    };
+        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(), // Adding the timestamp here
+    };        
 
     let package_index_layer = context.cached_layer(
         layer_name,
@@ -590,11 +616,13 @@ impl From<CreatePackageIndexError> for libcnb::Error<DebianPackagesBuildpackErro
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 struct PackageIndexMetadata {
     hash: String,
+    timestamp: u64,  // Timestamp to track when the index was cached
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 struct ReleaseFileMetadata {
     etag: Option<String>,
+    timestamp: u64,  // Timestamp to track when the release file was cached
 }
 
 #[derive(Debug)]

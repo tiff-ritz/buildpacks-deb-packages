@@ -7,6 +7,7 @@ use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use ar::Archive as ArArchive;
 use async_compression::tokio::bufread::{GzipDecoder, XzDecoder, ZstdDecoder};
@@ -79,7 +80,16 @@ pub(crate) async fn install_packages(
             .map(|package| (package.name.to_string(), package.sha256sum.to_string()))
             .collect(),
         distro: distro.clone(),
+        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+        dependencies: packages_to_install
+            .iter()
+            .map(|package| (package.name.to_string(), package.get_dependencies()))  // Assuming get_dependencies() returns Vec<String>
+            .collect(),        
     };
+
+    // Clean up old versions
+    clean_up_old_versions(context, &new_metadata)?;
+    clean_up_old_dependencies(context, &new_metadata)?;
 
     let install_layer = context.cached_layer(
         layer_name!("packages"),
@@ -89,8 +99,8 @@ pub(crate) async fn install_packages(
             invalid_metadata_action: &|_| InvalidMetadataAction::DeleteLayer,
             restored_layer_action: &|old_metadata: &InstallationMetadata, _| {
                 if old_metadata == &new_metadata {
-                    // RestoredLayerAction::KeepLayer
-                    RestoredLayerAction::DeleteLayer
+                    RestoredLayerAction::KeepLayer
+                    // RestoredLayerAction::DeleteLayer
                 } else {
                     RestoredLayerAction::DeleteLayer
                 }
@@ -195,6 +205,46 @@ pub(crate) async fn install_packages(
     log = install_log.done();
 
     Ok(log)
+}
+
+fn clean_up_old_dependencies(
+    context: &Arc<BuildContext<DebianPackagesBuildpack>>,
+    current_metadata: &InstallationMetadata,
+) -> BuildpackResult<()> {
+    let layers = context.list_layers()?;
+    for layer in layers {
+        if let Some(metadata) = context.read_layer_metadata::<InstallationMetadata>(&layer)? {
+            // Check for outdated dependencies
+            let outdated_dependencies: Vec<String> = metadata
+                .dependencies
+                .keys()
+                .filter(|&dep| !current_metadata.dependencies.contains_key(dep))
+                .cloned()
+                .collect();
+
+            if !outdated_dependencies.is_empty() {
+                // Remove the outdated dependencies
+                context.remove_layer(layer)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn clean_up_old_versions(
+    context: &Arc<BuildContext<DebianPackagesBuildpack>>,
+    current_metadata: &InstallationMetadata,
+) -> BuildpackResult<()> {
+    let layers = context.list_layers()?;
+    for layer in layers {
+        if let Some(metadata) = context.read_layer_metadata::<InstallationMetadata>(&layer)? {
+            if metadata.package_checksums.keys().all(|key| current_metadata.package_checksums.contains_key(key)) && metadata.distro == current_metadata.distro {
+                // If the layer contains outdated versions of packages, delete it
+                context.remove_layer(layer)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn print_layer_contents(
@@ -671,6 +721,8 @@ impl From<InstallPackagesError> for libcnb::Error<DebianPackagesBuildpackError> 
 struct InstallationMetadata {
     package_checksums: HashMap<String, String>,
     distro: Distro,
+    timestamp: u64,  // Timestamp to track when the package was cached
+    dependencies: HashMap<String, Vec<String>>,  // Track dependencies
 }
 
 #[cfg(test)]
