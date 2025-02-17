@@ -419,11 +419,9 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                     let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
                     if entry_path.ends_with("postinst") {
-                        // println!("Found postinst script: {:?}", entry_path);
                         let mut postinst_path = output_dir.clone();
                         postinst_path.push(entry.path().map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?);
-                        // println!("Copying postinst script to: {:?}", postinst_path);
                         async_copy(&mut entry, &mut AsyncFile::create(&postinst_path).await.map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
                         postinst_script_path = Some(postinst_path);
@@ -440,11 +438,9 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                     let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
                     if entry_path.ends_with("postinst") {
-                        // println!("Found postinst script: {:?}", entry_path);
                         let mut postinst_path = output_dir.clone();
                         postinst_path.push(entry.path().map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?);
-                        // println!("Copying postinst script to: {:?}", postinst_path);
                         async_copy(&mut entry, &mut AsyncFile::create(&postinst_path).await.map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
                         postinst_script_path = Some(postinst_path);
@@ -464,11 +460,9 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                     let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
                     if entry_path.ends_with("postinst") {
-                        // println!("Found postinst script: {:?}", entry_path);
                         let mut postinst_path = output_dir.clone();
                         postinst_path.push(entry.path().map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?);
-                        // println!("Copying postinst script to: {:?}", postinst_path);
                         async_copy(&mut entry, &mut AsyncFile::create(&postinst_path).await.map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
                         postinst_script_path = Some(postinst_path);
