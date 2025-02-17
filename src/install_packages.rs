@@ -7,7 +7,7 @@ use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
 
 use ar::Archive as ArArchive;
 use async_compression::tokio::bufread::{GzipDecoder, XzDecoder, ZstdDecoder};
@@ -38,6 +38,7 @@ use walkdir::{DirEntry, WalkDir};
 // use tempfile::tempdir;
 
 // use crate::config::environment::Environment;
+// use crate::SystemTimeError::SystemTimeError; 
 use crate::config::RequestedPackage;
 use crate::debian::{Distro, MultiarchName, RepositoryPackage};
 use crate::{
@@ -80,16 +81,17 @@ pub(crate) async fn install_packages(
             .map(|package| (package.name.to_string(), package.sha256sum.to_string()))
             .collect(),
         distro: distro.clone(),
-        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+        timestamp: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(InstallPackagesError::SystemTimeError)?
+            .as_secs(), // Adding the timestamp here        
         dependencies: packages_to_install
             .iter()
-            .map(|package| (package.name.to_string(), package.get_dependencies()))  // Assuming get_dependencies() returns Vec<String>
+            // get_dependencies() returns HashSet<&str>
+            .map(|package| (package.name.to_string(), package.get_dependencies()
+                .into_iter().map(|s| s.to_string()).collect::<Vec<String>>()))            
             .collect(),        
     };
-
-    // Clean up old versions
-    clean_up_old_versions(context, &new_metadata)?;
-    clean_up_old_dependencies(context, &new_metadata)?;
 
     let install_layer = context.cached_layer(
         layer_name!("packages"),
@@ -99,8 +101,8 @@ pub(crate) async fn install_packages(
             invalid_metadata_action: &|_| InvalidMetadataAction::DeleteLayer,
             restored_layer_action: &|old_metadata: &InstallationMetadata, _| {
                 if old_metadata == &new_metadata {
-                    RestoredLayerAction::KeepLayer
-                    // RestoredLayerAction::DeleteLayer
+                    //RestoredLayerAction::KeepLayer
+                    RestoredLayerAction::DeleteLayer
                 } else {
                     RestoredLayerAction::DeleteLayer
                 }
@@ -207,45 +209,47 @@ pub(crate) async fn install_packages(
     Ok(log)
 }
 
-fn clean_up_old_dependencies(
-    context: &Arc<BuildContext<DebianPackagesBuildpack>>,
-    current_metadata: &InstallationMetadata,
-) -> BuildpackResult<()> {
-    let layers = context.list_layers()?;
-    for layer in layers {
-        if let Some(metadata) = context.read_layer_metadata::<InstallationMetadata>(&layer)? {
-            // Check for outdated dependencies
-            let outdated_dependencies: Vec<String> = metadata
-                .dependencies
-                .keys()
-                .filter(|&dep| !current_metadata.dependencies.contains_key(dep))
-                .cloned()
-                .collect();
+// fn clean_up_old_dependencies(
+//     context: &Arc<BuildContext<DebianPackagesBuildpack>>,
+//     current_metadata: &InstallationMetadata,
+// ) -> BuildpackResult<()> {
+//     // Get the specific "packages" cached layer
+//     let packages_layer = context.cached_layer("packages")?;
+    
+//     // Read and check metadata
+//     if let Some(metadata) = packages_layer.get_metadata::<InstallationMetadata>()? {
+//         // Check for outdated dependencies
+//         let outdated_dependencies: Vec<String> = metadata
+//             .dependencies
+//             .keys()
+//             .filter(|&dep| !current_metadata.dependencies.contains_key(dep))
+//             .cloned()
+//             .collect();
 
-            if !outdated_dependencies.is_empty() {
-                // Remove the outdated dependencies
-                context.remove_layer(layer)?;
-            }
-        }
-    }
-    Ok(())
-}
+//         if !outdated_dependencies.is_empty() {
+//             // Remove the layer if it contains outdated dependencies
+//             packages_layer.remove()?;
+//         }
+//     }
+    
+//     Ok(())
+// }
 
-fn clean_up_old_versions(
-    context: &Arc<BuildContext<DebianPackagesBuildpack>>,
-    current_metadata: &InstallationMetadata,
-) -> BuildpackResult<()> {
-    let layers = context.list_layers()?;
-    for layer in layers {
-        if let Some(metadata) = context.read_layer_metadata::<InstallationMetadata>(&layer)? {
-            if metadata.package_checksums.keys().all(|key| current_metadata.package_checksums.contains_key(key)) && metadata.distro == current_metadata.distro {
-                // If the layer contains outdated versions of packages, delete it
-                context.remove_layer(layer)?;
-            }
-        }
-    }
-    Ok(())
-}
+// fn clean_up_old_versions(
+//     context: &Arc<BuildContext<DebianPackagesBuildpack>>,
+//     current_metadata: &InstallationMetadata,
+// ) -> BuildpackResult<()> {
+//     let layers = context.list_layers()?;
+//     for layer in layers {
+//         if let Some(metadata) = context.read_layer_metadata::<InstallationMetadata>(&layer)? {
+//             if metadata.package_checksums.keys().all(|key| current_metadata.package_checksums.contains_key(key)) && metadata.distro == current_metadata.distro {
+//                 // If the layer contains outdated versions of packages, delete it
+//                 context.remove_layer(layer)?;
+//             }
+//         }
+//     }
+//     Ok(())
+// }
 
 fn print_layer_contents(
     install_path: &Path,
@@ -415,11 +419,11 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                     let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
                     if entry_path.ends_with("postinst") {
-                        println!("Found postinst script: {:?}", entry_path);
+                        // println!("Found postinst script: {:?}", entry_path);
                         let mut postinst_path = output_dir.clone();
                         postinst_path.push(entry.path().map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?);
-                        println!("Copying postinst script to: {:?}", postinst_path);
+                        // println!("Copying postinst script to: {:?}", postinst_path);
                         async_copy(&mut entry, &mut AsyncFile::create(&postinst_path).await.map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
                         postinst_script_path = Some(postinst_path);
@@ -436,14 +440,17 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                     let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
                     if entry_path.ends_with("postinst") {
-                        println!("Found postinst script: {:?}", entry_path);
+                        // println!("Found postinst script: {:?}", entry_path);
                         let mut postinst_path = output_dir.clone();
                         postinst_path.push(entry.path().map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?);
-                        println!("Copying postinst script to: {:?}", postinst_path);
+                        // println!("Copying postinst script to: {:?}", postinst_path);
                         async_copy(&mut entry, &mut AsyncFile::create(&postinst_path).await.map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
                         postinst_script_path = Some(postinst_path);
+
+                        // Call execute_postinst_script here
+                        execute_postinst_script(postinst_script_path.clone().unwrap()).await?;                            
                     }                
                 }
             }
@@ -457,14 +464,17 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                     let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
                     if entry_path.ends_with("postinst") {
-                        println!("Found postinst script: {:?}", entry_path);
+                        // println!("Found postinst script: {:?}", entry_path);
                         let mut postinst_path = output_dir.clone();
                         postinst_path.push(entry.path().map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?);
-                        println!("Copying postinst script to: {:?}", postinst_path);
+                        // println!("Copying postinst script to: {:?}", postinst_path);
                         async_copy(&mut entry, &mut AsyncFile::create(&postinst_path).await.map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
                         postinst_script_path = Some(postinst_path);
+
+                        // Call execute_postinst_script here
+                        execute_postinst_script(postinst_script_path.clone().unwrap()).await?;                            
                     }                
                 }
             }            
@@ -481,23 +491,25 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
         };
     }
 
-    if let Some(postinst_path) = postinst_script_path {
-        // Log the execution of the postinst script
-        println!("Executing postinst script at {:?}", postinst_path);
+    Ok(())        
+}
 
-        // Make the postinst script executable
-        set_permissions(&postinst_path, PermissionsExt::from_mode(0o755)).await
-            .map_err(|e| InstallPackagesError::SetPermissions(postinst_path.clone(), e))?;
+async fn execute_postinst_script(postinst_path: PathBuf) -> Result<(), InstallPackagesError> {    
+    // Log the execution of the postinst script
+    println!("Executing postinst script at {:?}", postinst_path);
 
-        // Run the postinst script
-        let output = Command::new(postinst_path)
-            .output()
-            .await
-            .map_err(|e| InstallPackagesError::ExecutePostinstScript(e))?;
+    // Make the postinst script executable
+    set_permissions(&postinst_path, PermissionsExt::from_mode(0o755)).await
+        .map_err(|e| InstallPackagesError::SetPermissions(postinst_path.clone(), e))?;
 
-        // Log the output of the postinst script
-        println!("Postinst script output: {:?}", output);
-    }
+    // Run the postinst script
+    let output = Command::new(postinst_path)
+        .output()
+        .await
+        .map_err(|e| InstallPackagesError::ExecutePostinstScript(e))?;
+
+    // Log the output of the postinst script
+    // println!("Postinst script output: {:?}", output);
 
     Ok(())        
 }
@@ -628,7 +640,7 @@ where
     let paths_str = paths_vec.join(separator.as_ref());
 
     // Log the environment variable being added
-    println!("Adding env var: {}={:?}", name, paths_str);
+    // println!("Adding env var: {}={:?}", name, paths_str);
 
     layer_env.insert(Scope::All, ModificationBehavior::Delimiter, name, separator);
     layer_env.insert(Scope::All, ModificationBehavior::Prepend, name, paths_str);
@@ -709,6 +721,7 @@ pub(crate) enum InstallPackagesError {
     WritePackageConfig(PathBuf, std::io::Error),
     SetPermissions(PathBuf, std::io::Error),
     ExecutePostinstScript(std::io::Error),
+    SystemTimeError(SystemTimeError),
 }
 
 impl From<InstallPackagesError> for libcnb::Error<DebianPackagesBuildpackError> {

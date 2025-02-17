@@ -3,6 +3,7 @@ use std::io::Stdout;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
 
 use apt_parser::errors::APTError;
 use apt_parser::Release;
@@ -14,7 +15,7 @@ use futures::TryStreamExt;
 use libcnb::build::BuildContext;
 use libcnb::data::layer::{LayerName, LayerNameError};
 use libcnb::layer::{
-    CachedLayerDefinition, EmptyLayerCause, InvalidMetadataAction, LayerState, RestoredLayerAction,
+    CachedLayerDefinition, EmptyLayerCause, InvalidMetadataAction, LayerState, RestoredLayerAction
 };
 use rayon::iter::{Either, IntoParallelIterator, ParallelBridge, ParallelIterator};
 use reqwest::header::ETAG;
@@ -68,13 +69,6 @@ pub(crate) async fn create_package_index(
     let timer = log.start_timer("Updating");
     let updated_sources = update_sources(context, client, &distro.get_source_list()).await?;
     let log = timer.done();
-
-    // Clean up old package indexes
-    for updated_source in &updated_sources {
-        for updated_package_index in &updated_source.package_indexes {
-            clean_up_old_indexes(context, &updated_package_index.metadata)?;
-        }
-    }
 
     let log = updated_sources
         .iter()
@@ -142,22 +136,6 @@ pub(crate) async fn create_package_index(
         .done();
 
     Ok((package_index, log))
-}
-
-fn clean_up_old_indexes(
-    context: &Arc<BuildContext<DebianPackagesBuildpack>>,
-    current_metadata: &PackageIndexMetadata,
-) -> BuildpackResult<()> {
-    let layers = context.list_layers()?;
-    for layer in layers {
-        if let Some(metadata) = context.read_layer_metadata::<PackageIndexMetadata>(&layer)? {
-            if metadata.hash != current_metadata.hash {
-                // If the layer contains outdated package indexes, delete it
-                context.remove_layer(layer)?;
-            }
-        }
-    }
-    Ok(())
 }
 
 async fn update_sources(
@@ -310,7 +288,10 @@ async fn get_release(
                 None
             }
         }),
-        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(), // Adding the timestamp here
+        timestamp: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(CreatePackageIndexError::SystemTimeError)?
+            .as_secs(), // Adding the timestamp here
     };        
 
     let release_file_layer = context.cached_layer(
@@ -409,7 +390,9 @@ async fn get_package_list(
     // Create new metadata with a timestamp
     let new_metadata = PackageIndexMetadata {
         hash: hash.to_string(),
-        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(), // Adding the timestamp here
+        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)
+            .map_err(CreatePackageIndexError::SystemTimeError)?
+            .as_secs(), // Adding the timestamp here
     };        
 
     let package_index_layer = context.cached_layer(
@@ -605,6 +588,13 @@ pub(crate) enum CreatePackageIndexError {
     CpuTaskFailed(RecvError),
     ReadPackagesFile(PathBuf, std::io::Error),
     ParsePackages(PathBuf, Vec<ParseRepositoryPackageError>),
+    SystemTimeError(SystemTimeError),
+}
+
+impl From<SystemTimeError> for CreatePackageIndexError {
+    fn from(err: SystemTimeError) -> CreatePackageIndexError {
+        CreatePackageIndexError::SystemTimeError(err)
+    }
 }
 
 impl From<CreatePackageIndexError> for libcnb::Error<DebianPackagesBuildpackError> {

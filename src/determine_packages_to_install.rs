@@ -11,6 +11,10 @@ use std::fmt::{Display, Formatter};
 use std::fs::read_to_string;
 use std::io::Stdout;
 use std::path::PathBuf;
+use std::time::SystemTimeError;
+
+const SPECIAL_CASE_PACKAGE: &str = "portaudio19-dev";
+const ADDITIONAL_PACKAGE: &str = "libportaudio2";
 
 pub(crate) fn determine_packages_to_install(
     package_index: &PackageIndex,
@@ -171,6 +175,40 @@ fn visit(
             }
         }
 
+        if let Some(repository_package) = package_index.get_highest_available_version(package) {
+            // Special case handling: Ensure libportaudio2 is installed before portaudio19-dev
+            if package == SPECIAL_CASE_PACKAGE {
+                if should_visit_dependency(ADDITIONAL_PACKAGE, system_packages, packages_marked_for_install) {
+                    visit(
+                        ADDITIONAL_PACKAGE,
+                        skip_dependencies,
+                        force_if_installed_on_system,
+                        system_packages,
+                        package_index,
+                        packages_marked_for_install,
+                        visit_stack,
+                        package_notifications,
+                    )?;
+                }
+            }
+        }
+
+        // // Special case handling: Add libportaudio2 if portaudio19-dev is included
+        // if package == SPECIAL_CASE_PACKAGE {
+        //     if should_visit_dependency(ADDITIONAL_PACKAGE, system_packages, packages_marked_for_install) {
+        //        visit(
+        //         ADDITIONAL_PACKAGE,
+        //         skip_dependencies,
+        //         force_if_installed_on_system,
+        //         system_packages,
+        //         package_index,
+        //         packages_marked_for_install,
+        //         visit_stack,
+        //         package_notifications,
+        //         )?;
+        //     }
+        // }
+
         visit_stack.shift_remove(&repository_package.name);
     } else {
         let virtual_package_provider =
@@ -299,6 +337,7 @@ pub(crate) enum DeterminePackagesToInstallError {
     ParseSystemPackage(PathBuf, String, apt_parser::errors::APTError),
     PackageNotFound(String, Vec<String>),
     VirtualPackageMustBeSpecified(String, HashSet<String>),
+    SystemTimeError(SystemTimeError),
 }
 
 impl From<DeterminePackagesToInstallError> for libcnb::Error<DebianPackagesBuildpackError> {
