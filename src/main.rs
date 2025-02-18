@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::io::stdout;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTimeError};
 
 use bullet_stream::Print;
 use indoc::formatdoc;
@@ -159,6 +159,7 @@ pub(crate) enum DebianPackagesBuildpackError {
     CreatePackageIndex(CreatePackageIndexError),
     DeterminePackagesToInstall(DeterminePackagesToInstallError),
     InstallPackages(InstallPackagesError),
+    SystemTimeError(SystemTimeError),
 }
 
 impl From<DebianPackagesBuildpackError> for libcnb::Error<DebianPackagesBuildpackError> {
