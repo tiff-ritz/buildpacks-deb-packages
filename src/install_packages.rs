@@ -482,7 +482,7 @@ where
     let paths_str = paths_vec.join(separator.as_ref());
 
     // Log the environment variable being added
-    println!("Adding env var: {}={:?}", name, paths_str);
+    // println!("Adding env var: {}={:?}", name, paths_str);
 
     layer_env.insert(Scope::All, ModificationBehavior::Delimiter, name, separator);
     layer_env.insert(Scope::All, ModificationBehavior::Prepend, name, paths_str);
@@ -621,7 +621,6 @@ mod test {
         let install_dir_str = install_path.to_string_lossy().to_string();
 
         let initial_package_env_vars = package_env_vars();
-        println!("initial_package_env_vars: {:?}", initial_package_env_vars);        
 
         let package_env_vars: HashMap<String, HashMap<String, String>> = initial_package_env_vars
             .into_iter()
@@ -634,7 +633,6 @@ mod test {
                 )
             })
             .collect();        
-        println!("Package env vars: {:?}", package_env_vars);
 
         // Create dummy packages to install and skipped packages
         let packages_to_install = vec![RepositoryPackage {
@@ -718,7 +716,6 @@ mod test {
         // Convert package_env_vars to the correct type and replace {install_dir} with the actual path
         let install_dir_str = install_path.to_string_lossy().to_string();
         let initial_package_env_vars = package_env_vars();
-        println!("initial_package_env_vars: {:?}", initial_package_env_vars);        
 
         let package_env_vars: HashMap<String, HashMap<String, String>> = initial_package_env_vars
             .into_iter()
