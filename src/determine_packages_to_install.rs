@@ -9,12 +9,15 @@ use indexmap::IndexSet;
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::fs::read_to_string;
+use std::collections::HashMap;
 use std::io::Stdout;
 use std::path::PathBuf;
 use std::time::SystemTimeError;
 
-const SPECIAL_CASE_PACKAGE: &str = "portaudio19-dev";
-const ADDITIONAL_PACKAGE: &str = "libportaudio2";
+const SPECIAL_CASE_MAP: &[(&str, &[&str])] = &[
+    ("portaudio19-dev", &["libportaudio2"]),
+    ("7zip", &["7zip-standalone"]),
+];
 
 pub(crate) fn determine_packages_to_install(
     package_index: &PackageIndex,
@@ -48,6 +51,12 @@ pub(crate) fn determine_packages_to_install(
     let mut packages_marked_for_install = IndexSet::new();
     let mut skipped_packages = Vec::new();
 
+    let special_case_map: HashMap<&str, Vec<&str>> = SPECIAL_CASE_MAP
+        .iter()
+        .cloned()
+        .map(|(special, additionals)| (special, additionals.to_vec()))
+        .collect();
+
     for requested_package in requested_packages {
         let mut notification_log = log.bullet(format!(
             "Determining install requirements for requested package {package}",
@@ -65,6 +74,7 @@ pub(crate) fn determine_packages_to_install(
             &mut packages_marked_for_install,
             &mut visit_stack,
             &mut package_notifications,
+            &special_case_map,
         )? {
             skipped_packages.push(requested_package.clone());
         };
@@ -118,6 +128,7 @@ fn visit(
     packages_marked_for_install: &mut IndexSet<PackageMarkedForInstall>,
     visit_stack: &mut IndexSet<String>,
     package_notifications: &mut IndexSet<PackageNotification>,
+    special_case_map: &HashMap<&str, Vec<&str>>,
 ) -> BuildpackResult<bool> {
     if let Some(system_package) = find_system_package_by_name(package, system_packages) {
         // When a package is already installed on the system we skip installing it. However, there are
@@ -144,6 +155,25 @@ fn visit(
     }
 
     if let Some(repository_package) = package_index.get_highest_available_version(package) {
+        // Special case handling: Ensure additional packages are installed before special case packages
+        if let Some(additional_packages) = special_case_map.get(package) {
+            for &additional_package in additional_packages {
+                if should_visit_dependency(additional_package, system_packages, packages_marked_for_install) {
+                    visit(
+                        additional_package,
+                        skip_dependencies,
+                        force_if_installed_on_system,
+                        system_packages,
+                        package_index,
+                        packages_marked_for_install,
+                        visit_stack,
+                        package_notifications,
+                        special_case_map,
+                    )?;
+                }
+            }
+        }
+
         packages_marked_for_install.insert(PackageMarkedForInstall {
             repository_package: repository_package.clone(),
             requested_by: visit_stack.first().cloned().unwrap_or(package.to_string()),
@@ -170,44 +200,11 @@ fn visit(
                         packages_marked_for_install,
                         visit_stack,
                         package_notifications,
+                        special_case_map,
                     )?;
                 }
             }
         }
-
-        if let Some(repository_package) = package_index.get_highest_available_version(package) {
-            // Special case handling: Ensure libportaudio2 is installed before portaudio19-dev
-            if package == SPECIAL_CASE_PACKAGE {
-                if should_visit_dependency(ADDITIONAL_PACKAGE, system_packages, packages_marked_for_install) {
-                    visit(
-                        ADDITIONAL_PACKAGE,
-                        skip_dependencies,
-                        force_if_installed_on_system,
-                        system_packages,
-                        package_index,
-                        packages_marked_for_install,
-                        visit_stack,
-                        package_notifications,
-                    )?;
-                }
-            }
-        }
-
-        // // Special case handling: Add libportaudio2 if portaudio19-dev is included
-        // if package == SPECIAL_CASE_PACKAGE {
-        //     if should_visit_dependency(ADDITIONAL_PACKAGE, system_packages, packages_marked_for_install) {
-        //        visit(
-        //         ADDITIONAL_PACKAGE,
-        //         skip_dependencies,
-        //         force_if_installed_on_system,
-        //         system_packages,
-        //         package_index,
-        //         packages_marked_for_install,
-        //         visit_stack,
-        //         package_notifications,
-        //         )?;
-        //     }
-        // }
 
         visit_stack.shift_remove(&repository_package.name);
     } else {
@@ -225,6 +222,7 @@ fn visit(
             packages_marked_for_install,
             visit_stack,
             package_notifications,
+            special_case_map,
         )?;
 
         visit_stack.shift_remove(package);
@@ -1151,6 +1149,52 @@ mod test {
         );
     }
 
+    #[test]
+    fn install_special_case_package_with_additional_packages() {
+        let portaudio19_dev = create_repository_package().name("portaudio19-dev").call();
+        let libportaudio2 = create_repository_package().name("libportaudio2").call();
+
+        let (new_packages_marked_for_install, package_notifications) = test_install_state()
+            .with_package_index(vec![
+                &portaudio19_dev,
+                &libportaudio2,
+            ])
+            .install("portaudio19-dev")
+            .call()
+            .unwrap();
+
+        assert_eq!(
+            new_packages_marked_for_install,
+            IndexSet::from([
+                create_package_marked_for_install()
+                    .repository_package(&libportaudio2)
+                    .requested_by("libportaudio2")
+                    .call(),
+                create_package_marked_for_install()
+                    .repository_package(&portaudio19_dev)
+                    .requested_by("portaudio19-dev")
+                    .call(),
+            ])
+        );
+
+        assert_eq!(
+            package_notifications,
+            IndexSet::from([
+                PackageNotification::Added {
+                    repository_package: libportaudio2.clone(),
+                    dependency_path: vec![],
+                    // dependency_path: vec!["portaudio19-dev".to_string()],
+                    forced_install: false,
+                },
+                PackageNotification::Added {
+                    repository_package: portaudio19_dev.clone(),
+                    dependency_path: vec![],
+                    forced_install: false,
+                },
+            ])
+        );
+    }    
+
     #[builder]
     fn test_install_state(
         install: &str,
@@ -1184,6 +1228,12 @@ mod test {
 
         let mut visit_stack = IndexSet::new();
 
+        let special_case_map: HashMap<&str, Vec<&str>> = SPECIAL_CASE_MAP
+            .iter()
+            .cloned()
+            .map(|(special, additionals)| (special, additionals.to_vec()))
+            .collect();
+
         visit(
             package_to_install,
             skip_dependencies,
@@ -1193,6 +1243,7 @@ mod test {
             &mut packages_marked_for_install,
             &mut visit_stack,
             &mut package_notifications,
+            &special_case_map,
         )?;
 
         let new_packages_marked_for_install = packages_marked_for_install

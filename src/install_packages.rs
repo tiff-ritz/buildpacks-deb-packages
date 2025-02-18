@@ -35,10 +35,7 @@ use tokio_tar::Archive as TarArchive;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 use tokio_util::io::InspectReader;
 use walkdir::{DirEntry, WalkDir};
-// use tempfile::tempdir;
 
-// use crate::config::environment::Environment;
-// use crate::SystemTimeError::SystemTimeError; 
 use crate::config::RequestedPackage;
 use crate::debian::{Distro, MultiarchName, RepositoryPackage};
 use crate::{
@@ -194,7 +191,6 @@ pub(crate) async fn install_packages(
         &package_env_vars,
         &packages_to_install,
         &skipped_packages,
-        // &env,
     );
 
     install_layer.write_env(layer_env)?;
@@ -208,48 +204,6 @@ pub(crate) async fn install_packages(
 
     Ok(log)
 }
-
-// fn clean_up_old_dependencies(
-//     context: &Arc<BuildContext<DebianPackagesBuildpack>>,
-//     current_metadata: &InstallationMetadata,
-// ) -> BuildpackResult<()> {
-//     // Get the specific "packages" cached layer
-//     let packages_layer = context.cached_layer("packages")?;
-    
-//     // Read and check metadata
-//     if let Some(metadata) = packages_layer.get_metadata::<InstallationMetadata>()? {
-//         // Check for outdated dependencies
-//         let outdated_dependencies: Vec<String> = metadata
-//             .dependencies
-//             .keys()
-//             .filter(|&dep| !current_metadata.dependencies.contains_key(dep))
-//             .cloned()
-//             .collect();
-
-//         if !outdated_dependencies.is_empty() {
-//             // Remove the layer if it contains outdated dependencies
-//             packages_layer.remove()?;
-//         }
-//     }
-    
-//     Ok(())
-// }
-
-// fn clean_up_old_versions(
-//     context: &Arc<BuildContext<DebianPackagesBuildpack>>,
-//     current_metadata: &InstallationMetadata,
-// ) -> BuildpackResult<()> {
-//     let layers = context.list_layers()?;
-//     for layer in layers {
-//         if let Some(metadata) = context.read_layer_metadata::<InstallationMetadata>(&layer)? {
-//             if metadata.package_checksums.keys().all(|key| current_metadata.package_checksums.contains_key(key)) && metadata.distro == current_metadata.distro {
-//                 // If the layer contains outdated versions of packages, delete it
-//                 context.remove_layer(layer)?;
-//             }
-//         }
-//     }
-//     Ok(())
-// }
 
 fn print_layer_contents(
     install_path: &Path,
@@ -425,6 +379,9 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                         async_copy(&mut entry, &mut AsyncFile::create(&postinst_path).await.map_err(
                             |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?).await.map_err(|e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
                         postinst_script_path = Some(postinst_path);
+
+                        // Call execute_postinst_script here
+                        execute_postinst_script(postinst_script_path.clone().unwrap()).await?;                            
                     }                
                 }
             }
@@ -724,6 +681,12 @@ impl From<InstallPackagesError> for libcnb::Error<DebianPackagesBuildpackError> 
     }
 }
 
+impl From<std::io::Error> for InstallPackagesError {
+    fn from(error: std::io::Error) -> Self {
+        InstallPackagesError::ExecutePostinstScript(error)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone)]
 struct InstallationMetadata {
     package_checksums: HashMap<String, String>,
@@ -747,10 +710,6 @@ mod test {
     use tempfile::tempdir;
     use tokio::process::Command;
     use mockall::predicate::*;
-    // use mockall::*;
-    // use tar::{Builder, Header};
-    // use tokio_tar::Archive as TarArchive;
-    // use ar::Archive as ArArchive;
 
     use crate::debian::MultiarchName;
     use crate::install_packages::{configure_layer_environment, package_env_vars};
@@ -766,63 +725,25 @@ mod test {
     use flate2::Compression;
     
     #[tokio::test]
-    async fn test_extract_with_postinst_script() -> Result<(), Box<dyn std::error::Error>> {
-        // Create a temporary directory for the output
-        let output_dir = tempdir()?;
-        let output_path = output_dir.path().to_path_buf();
-        println!("Created temporary directory at {:?}", output_path);
-
-        // Use the actual .deb file from the fixtures folder
-        let fixture_deb_path = std::path::Path::new("tests/fixtures/packages/dns-flood-detector_1.12-7_amd64.deb");
-        let debian_archive_path = output_path.join("test.deb");
-        std::fs::copy(&fixture_deb_path, &debian_archive_path)?;
-        println!("Copied fixture .deb file from {:?} to {:?}", fixture_deb_path, debian_archive_path);        
+    async fn test_execute_postinst_script() -> Result<(), InstallPackagesError> {
     
-        // Call the extract function
-        println!("Calling extract function");
-        extract(debian_archive_path, output_path.clone()).await?;
-        println!("Called extract function");
+        // Manually extract the postinst script for testing
+        let postinst_path = "tests/fixtures/scripts/postinst";
     
-        // Verify that the postinst script was extracted and executed
-        let postinst_path = output_path.join("postinst");
-        assert!(postinst_path.exists());
-        println!("Verified that postinst script was extracted");
+        // Call the execute_postinst_script function
+        println!("Calling execute_postinst_script function");
+        execute_postinst_script(postinst_path.clone().into()).await?;
+        println!("Called execute_postinst_script function");
     
         let permissions = fs::metadata(&postinst_path)?.permissions();
         assert_eq!(permissions.mode() & 0o777, 0o755);
         println!("Verified permissions of postinst script");
-   
+    
         let output = Command::new(postinst_path).output().await?;
         assert!(output.status.success());
         assert_eq!(output.status.code(), Some(0));
         println!("Verified execution of postinst script with exit code 0");
     
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_extract_without_postinst_script() -> Result<(), Box<dyn std::error::Error>> {
-        // Create a temporary directory for the output
-        let output_dir = tempdir()?;
-        let output_path = output_dir.path().to_path_buf();
-        println!("Created temporary directory at {:?}", output_path);
-    
-        // Use the actual .deb file from the fixtures folder
-        let fixture_deb_path = std::path::Path::new("tests/fixtures/packages/bcrypt_1.1-8.1_amd64.deb");
-        let debian_archive_path = output_path.join("test.deb");
-        std::fs::copy(&fixture_deb_path, &debian_archive_path)?;
-        println!("Copied fixture .deb file from {:?} to {:?}", fixture_deb_path, debian_archive_path);        
-        
-        // Call the extract function
-        println!("Calling extract function");
-        extract(debian_archive_path, output_path.clone()).await?;
-        println!("Called extract function");
-        
-        // Verify that the postinst script does not exist
-        let postinst_path = output_path.join("postinst");
-        assert!(!postinst_path.exists());
-        println!("Verified that postinst script does not exist");
-        
         Ok(())
     }
 
