@@ -1153,11 +1153,15 @@ mod test {
     fn install_special_case_package_with_additional_packages() {
         let portaudio19_dev = create_repository_package().name("portaudio19-dev").call();
         let libportaudio2 = create_repository_package().name("libportaudio2").call();
+        let zip = create_repository_package().name("7zip").call();
+        let zip_standalone = create_repository_package().name("7zip-standalone").call();
 
         let (new_packages_marked_for_install, package_notifications) = test_install_state()
             .with_package_index(vec![
                 &portaudio19_dev,
                 &libportaudio2,
+                &zip,
+                &zip_standalone,
             ])
             .install("portaudio19-dev")
             .call()
@@ -1183,11 +1187,51 @@ mod test {
                 PackageNotification::Added {
                     repository_package: libportaudio2.clone(),
                     dependency_path: vec![],
-                    // dependency_path: vec!["portaudio19-dev".to_string()],
                     forced_install: false,
                 },
                 PackageNotification::Added {
                     repository_package: portaudio19_dev.clone(),
+                    dependency_path: vec![],
+                    forced_install: false,
+                },
+            ])
+        );
+
+        let (new_packages_marked_for_install, package_notifications) = test_install_state()
+            .with_package_index(vec![
+                &portaudio19_dev,
+                &libportaudio2,
+                &zip,
+                &zip_standalone,
+            ])
+            .install("7zip")
+            .call()
+            .unwrap();
+
+        assert_eq!(
+            new_packages_marked_for_install,
+            IndexSet::from([
+                create_package_marked_for_install()
+                    .repository_package(&zip_standalone)
+                    .requested_by("7zip-standalone")
+                    .call(),
+                create_package_marked_for_install()
+                    .repository_package(&zip)
+                    .requested_by("7zip")
+                    .call(),
+            ])
+        );
+
+        assert_eq!(
+            package_notifications,
+            IndexSet::from([
+                PackageNotification::Added {
+                    repository_package: zip_standalone.clone(),
+                    dependency_path: vec![],
+                    forced_install: false,
+                },
+                PackageNotification::Added {
+                    repository_package: zip.clone(),
                     dependency_path: vec![],
                     forced_install: false,
                 },
