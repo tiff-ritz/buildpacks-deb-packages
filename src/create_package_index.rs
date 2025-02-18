@@ -3,6 +3,7 @@ use std::io::Stdout;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
 
 use apt_parser::errors::APTError;
 use apt_parser::Release;
@@ -14,7 +15,7 @@ use futures::TryStreamExt;
 use libcnb::build::BuildContext;
 use libcnb::data::layer::{LayerName, LayerNameError};
 use libcnb::layer::{
-    CachedLayerDefinition, EmptyLayerCause, InvalidMetadataAction, LayerState, RestoredLayerAction,
+    CachedLayerDefinition, EmptyLayerCause, InvalidMetadataAction, LayerState, RestoredLayerAction
 };
 use rayon::iter::{Either, IntoParallelIterator, ParallelBridge, ParallelIterator};
 use reqwest::header::ETAG;
@@ -287,7 +288,11 @@ async fn get_release(
                 None
             }
         }),
-    };
+        timestamp: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(CreatePackageIndexError::SystemTimeError)?
+            .as_secs(), // Adding the timestamp here
+    };        
 
     let release_file_layer = context.cached_layer(
         layer_name,
@@ -382,9 +387,13 @@ async fn get_package_list(
     let layer_name = LayerName::from_str(&format!("{:x}", Sha256::digest(&package_index_url)))
         .map_err(|e| CreatePackageIndexError::InvalidLayerName(package_index_url.clone(), e))?;
 
+    // Create new metadata with a timestamp
     let new_metadata = PackageIndexMetadata {
         hash: hash.to_string(),
-    };
+        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)
+            .map_err(CreatePackageIndexError::SystemTimeError)?
+            .as_secs(), // Adding the timestamp here
+    };        
 
     let package_index_layer = context.cached_layer(
         layer_name,
@@ -579,6 +588,13 @@ pub(crate) enum CreatePackageIndexError {
     CpuTaskFailed(RecvError),
     ReadPackagesFile(PathBuf, std::io::Error),
     ParsePackages(PathBuf, Vec<ParseRepositoryPackageError>),
+    SystemTimeError(SystemTimeError),
+}
+
+impl From<SystemTimeError> for CreatePackageIndexError {
+    fn from(err: SystemTimeError) -> CreatePackageIndexError {
+        CreatePackageIndexError::SystemTimeError(err)
+    }
 }
 
 impl From<CreatePackageIndexError> for libcnb::Error<DebianPackagesBuildpackError> {
@@ -590,11 +606,13 @@ impl From<CreatePackageIndexError> for libcnb::Error<DebianPackagesBuildpackErro
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 struct PackageIndexMetadata {
     hash: String,
+    timestamp: u64,  // Timestamp to track when the index was cached
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 struct ReleaseFileMetadata {
     etag: Option<String>,
+    timestamp: u64,  // Timestamp to track when the release file was cached
 }
 
 #[derive(Debug)]

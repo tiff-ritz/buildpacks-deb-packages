@@ -6,6 +6,7 @@ use crate::errors::ErrorType::{Framework, Internal, UserFacing};
 use crate::install_packages::InstallPackagesError;
 use crate::DebianPackagesBuildpackError;
 use std::collections::BTreeSet;
+use std::time::SystemTimeError;
 
 use bon::builder;
 use bullet_stream::{style, Print};
@@ -38,6 +39,7 @@ fn on_buildpack_error(error: DebianPackagesBuildpackError) -> ErrorMessage {
             on_determine_packages_to_install_error(e)
         }
         DebianPackagesBuildpackError::InstallPackages(e) => on_install_packages_error(e),
+        DebianPackagesBuildpackError::SystemTimeError(e) => on_system_time_error(e),
     }
 }
 
@@ -193,6 +195,15 @@ fn on_unsupported_distro_error(error: UnsupportedDistroError) -> ErrorMessage {
             - Ubuntu 24.04 (amd64, arm64)
             - Ubuntu 22.04 (amd64)
         " })
+        .call()
+}
+
+fn on_system_time_error(error: SystemTimeError) -> ErrorMessage {
+    create_error()
+        .error_type(Internal)
+        .header("Failed to get system time")
+        .body(format!("System time error: {}", error))
+        .debug_info(error.to_string())
         .call()
 }
 
@@ -494,6 +505,15 @@ fn on_create_package_index_error(error: CreatePackageIndexError) -> ErrorMessage
                 ))
                 .call()
         }
+
+        CreatePackageIndexError::SystemTimeError(e) => {
+            create_error()
+                .error_type(Internal)
+                .header("Failed to get system time in CreatePackageIndex")
+                .body(format!("System time error: {}", e))
+                .debug_info(e.to_string())                
+                .call()
+        }
     }
 }
 
@@ -583,6 +603,15 @@ fn on_determine_packages_to_install_error(error: DeterminePackagesToInstallError
                 .body(format!("{body_start}{body_provider_details}\n\n{body_end}"))
                 .call()
         }
+
+        DeterminePackagesToInstallError::SystemTimeError(e) => {
+            create_error()
+                .error_type(Internal)
+                .header("Failed to get system time in DeterminePackagesToInstall")
+                .body(format!("System time error: {}", e))
+                .debug_info(e.to_string())                
+                .call()
+        }        
     }
 }
 
@@ -743,6 +772,38 @@ fn on_install_packages_error(error: InstallPackagesError) -> ErrorMessage {
                 .debug_info(e.to_string())
                 .call()
         }
+
+        InstallPackagesError::SetPermissions(file, e) => {
+            let file = file_value(file);
+            create_error()
+                .error_type(Internal)
+                .header("Failed to set permissions for postinst script")
+                .body(formatdoc! {
+                    "An unexpected I/O error occurred while setting permissions for the postinst script at {file}."
+                })
+                .debug_info(e.to_string())
+                .call()
+        }
+
+        InstallPackagesError::ExecutePostinstScript(e) => {
+            create_error()
+                .error_type(Internal)
+                .header("Failed to execute postinst script")
+                .body(formatdoc! {
+                    "An error occurred while trying to execute the postinst script."
+                })
+                .debug_info(e.to_string())
+                .call()
+        }        
+
+        InstallPackagesError::SystemTimeError(e) => {
+            create_error()
+                .error_type(Internal)
+                .header("Failed to get system time in InstallPackages")
+                .body(format!("System time error: {}", e))
+                .debug_info(e.to_string())                
+                .call()
+        }        
     }
 }
 

@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::io::stdout;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTimeError};
 
 use bullet_stream::Print;
 use indoc::formatdoc;
@@ -126,8 +126,8 @@ impl Buildpack for DebianPackagesBuildpack {
             determine_packages_to_install(&package_index, config.install, log)?;
         
         // show more info on the packages to install
-        println!("packages_to_install: {:?}", packages_to_install);
-        println!("skipped_packages: {:?}", skipped_packages);
+        // println!("packages_to_install: {:?}", packages_to_install);
+        // println!("skipped_packages: {:?}", skipped_packages);
 
         for package in &packages_to_install {
             if let Some(provides) = &package.provides {
@@ -163,6 +163,7 @@ pub(crate) enum DebianPackagesBuildpackError {
     CreatePackageIndex(CreatePackageIndexError),
     DeterminePackagesToInstall(DeterminePackagesToInstallError),
     InstallPackages(InstallPackagesError),
+    SystemTimeError(SystemTimeError),
 }
 
 impl From<DebianPackagesBuildpackError> for libcnb::Error<DebianPackagesBuildpackError> {
