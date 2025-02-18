@@ -1,6 +1,6 @@
 # Using `PACKAGE_ENV_VARS` in `src/install_packages.rs`
 
-The `PACKAGE_ENV_VARS` constant is a core feature of the `install_packages` module in `src/install_packages.rs`. This document explains how it works, how to add to the constant, and what happens if a package is skipped. This information is intended for other programmers who might need to extend or maintain the codebase.
+The `PACKAGE_ENV_VARS` constant is a new feature of the Debian Buildpack in `src/install_packages.rs`. This document explains how it works, how to add to the constant, and what happens if a package is skipped. This information is intended for other programmers who might need to extend or maintain the codebase.
 
 ## How `PACKAGE_ENV_VARS` Works
 
@@ -79,7 +79,7 @@ const PACKAGE_ENV_VARS: &[(&str, &[(&str, &str)])] = &[
 
 ## Handling Skipped Packages
 
-When a package is skipped, its environment variables are still processed and applied if they are listed in the `PACKAGE_ENV_VARS` constant. This ensures that even if the package is not installed, any pre-existing environment variables are correctly set.
+When a package is skipped, its environment variables are still processed and applied if they are listed in the `PACKAGE_ENV_VARS` constant. This ensures that even if the package is not installed, any pre-existing environment variables are correctly set.  To accomplish this `determine_packages_to_install` was modified to return a list of skipped packages.
 
 ### Example
 
@@ -96,21 +96,6 @@ for skipped_package in skipped_packages {
 ```
 
 This approach ensures consistency in the environment configuration, even when certain packages are not installed.
-
-## List of Packages to Install
-
-The list of packages to install is specified in the `project.toml` file. This file should be located in the root directory of the project. Here is an example of how the `project.toml` file might look:
-
-```toml
-[com.heroku.buildpacks.deb-packages]
-install = [
-    "git",
-    "ghostscript",
-    "example-package",
-]
-```
-
-This configuration indicates that the packages `git`, `ghostscript`, and `example-package` should be installed. The `install_packages` function reads this list and processes each package accordingly.
 
 ## Conclusion
 

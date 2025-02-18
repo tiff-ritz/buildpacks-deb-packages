@@ -1,10 +1,10 @@
 # Using `SPECIAL_CASE_MAP` in `src/determine_packages_to_install.rs`
 
-The `SPECIAL_CASE_MAP` constant is a core feature of the `determine_packages_to_install` module in `src/determine_packages_to_install.rs`. This document explains how it works, how to add to the constant, and how it influences the package installation process. This information is intended for other programmers who might need to extend or maintain the codebase.
+The `SPECIAL_CASE_MAP` constant is a new feature of the Debian Buildpack  in `src/determine_packages_to_install.rs`. This document explains how it works, how to add to the constant, and how it influences the package installation process.
 
 ## How `SPECIAL_CASE_MAP` Works
 
-`SPECIAL_CASE_MAP` is a constant that defines special cases where additional packages should be installed alongside the requested package. This is useful for handling dependencies that are not automatically resolved by the package manager.
+`SPECIAL_CASE_MAP` is a constant that defines special cases where additional packages should be installed before the requested package. This is useful for handling dependencies that are not automatically resolved by the package manager.
 
 ### Definition
 
@@ -72,21 +72,6 @@ const SPECIAL_CASE_MAP: &[(&str, &[&str])] = &[
 ```
 
 3. **Testing**: Ensure the new special case package and its additional packages are correctly applied during the installation process by running the relevant tests.
-
-## List of Packages to Install
-
-The list of packages to install is specified in the `project.toml` file. This file should be located in the root directory of the project. Here is an example of how the `project.toml` file might look:
-
-```toml
-[com.heroku.buildpacks.deb-packages]
-install = [
-    "portaudio19-dev",
-    "7zip",
-    "example-package",
-]
-```
-
-This configuration indicates that the packages `portaudio19-dev`, `7zip`, and `example-package` should be installed. The `determine_packages_to_install` function reads this list and processes each package accordingly.
 
 ## Conclusion
 
