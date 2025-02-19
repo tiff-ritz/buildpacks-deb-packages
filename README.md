@@ -24,6 +24,15 @@ This buildpack is compatible with the following environments:
 | linux | amd64 | Ubuntu      | 22.04          |
 
 ---
+## Additional Features
+
+### PACKAGE_ENV_VARS
+
+The `PACKAGE_ENV_VARS` constant defines environment variables required by specific packages. When a package is installed, its associated environment variables are set to ensure the package functions correctly. For more details, see the [PACKAGE_ENV_VARS documentation](PACKAGE_ENV_VARS.md).
+
+### SPECIAL_CASE_MAP
+
+The `SPECIAL_CASE_MAP` constant defines special cases where additional packages should be installed before the requested package. This is useful for handling dependencies that are not automatically resolved by the package manager. For more details, see the [SPECIAL_CASE_MAP documentation](SPECIAL_CASE_MAP.md).
 
 ## Usage
 
@@ -52,11 +61,7 @@ project using the `com.heroku.buildpacks.deb-packages` table. The list of packag
 specified there. See below for the [configuration schema](#schema) and an [example](#example).
 
 ### Default Package Environment Variables
-The buildpack includes a set of default environment variables for each package, known as `PACKAGE_ENV_VARS`. These default environment variables are applied during the build process. However, you can override these default values by specifying environment variables in the project.toml file.
-
-## Environment Variables and Post-Install Commands for Skipped Packages
-
-Even if a package is skipped, the environment variables will still be applied. This ensures that any necessary configuration or setup steps are performed, even if the package itself is not installed.
+The buildpack includes a set of default environment variables for each package, known as `PACKAGE_ENV_VARS`. These default environment variables are applied during the build process.
 
 #### Example
 
@@ -178,6 +183,8 @@ For each package requested for install declared in the [buildpack configuration]
     - If it is already installed and the requested package is configured with `force = false`
         - Skip the package
 - If the requested package is configured with `skip_dependencies = false`:
+    - If the requested package is in the SPECIAL_CASE_MAP const definition:
+        - Read through and add the additional packages
     - Add the latest version of the requested package.
     - Read the dependencies listed in the [Depends][binary-dependency-fields]
       and [Pre-Depends][binary-dependency-fields]
@@ -202,9 +209,11 @@ For each package added after [determining the packages to install](#step-2-deter
   a [Debian Archive][debian-archive].
 - Extract the contents of the `data.tar` entry from the [Debian Archive][debian-archive] into a [layer][cnb-layer]
   available at `build` and `launch`.
+- Execute any `postinst` scripts found in the
+  package to perform additional setup tasks.
 - Rewrite any [pkg-config][package-config-file] files to use a `prefix` set to the layer directory of the installed
   package.
-- Configure the following [layer environment variables][cnb-environment] to be available at both `build` and `launch`:
+- Configure the following [layer environment variables][cnb-environment] and [PACKAGE_ENV_VAR][PACKAGE_ENV_VARS.md] to be available at both `build` and `launch`:
 
 | Environment Variable | Appended Values                                                                                                  | Contents         |
 |----------------------|------------------------------------------------------------------------------------------------------------------|------------------|

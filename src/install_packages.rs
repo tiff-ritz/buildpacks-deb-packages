@@ -446,9 +446,6 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
 }
 
 async fn execute_postinst_script(postinst_path: PathBuf) -> Result<(), InstallPackagesError> {    
-    // Log the execution of the postinst script
-    println!("Executing postinst script at {:?}", postinst_path);
-
     // Make the postinst script executable
     set_permissions(&postinst_path, PermissionsExt::from_mode(0o755)).await
         .map_err(|e| InstallPackagesError::SetPermissions(postinst_path.clone(), e))?;
@@ -458,9 +455,6 @@ async fn execute_postinst_script(postinst_path: PathBuf) -> Result<(), InstallPa
         .output()
         .await
         .map_err(|e| InstallPackagesError::ExecutePostinstScript(e))?;
-
-    // Log the output of the postinst script
-    // println!("Postinst script output: {:?}", output);
 
     Ok(())        
 }

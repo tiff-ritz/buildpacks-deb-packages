@@ -1,6 +1,6 @@
 # Using `SPECIAL_CASE_MAP` in `src/determine_packages_to_install.rs`
 
-The `SPECIAL_CASE_MAP` constant is a new feature of the Debian Buildpack  in `src/determine_packages_to_install.rs`. This document explains how it works, how to add to the constant, and how it influences the package installation process.
+The `SPECIAL_CASE_MAP` constant is a new feature in the `buildpacks-deb-packages` project located in `src/determine_packages_to_install.rs`. This document explains its functionality, how to add entries to it, and its impact on the package installation process.
 
 ## How `SPECIAL_CASE_MAP` Works
 
@@ -14,6 +14,7 @@ The `SPECIAL_CASE_MAP` constant is defined as a slice of tuples, where each tupl
 const SPECIAL_CASE_MAP: &[(&str, &[&str])] = &[
     ("portaudio19-dev", &["libportaudio2"]),
     ("7zip", &["7zip-standalone"]),
+    // add more mappings here
 ];
 ```
 

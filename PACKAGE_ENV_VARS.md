@@ -1,6 +1,6 @@
 # Using `PACKAGE_ENV_VARS` in `src/install_packages.rs`
 
-The `PACKAGE_ENV_VARS` constant is a new feature of the Debian Buildpack in `src/install_packages.rs`. This document explains how it works, how to add to the constant, and what happens if a package is skipped. This information is intended for other programmers who might need to extend or maintain the codebase.
+The `PACKAGE_ENV_VARS` constant is a new feature in the `buildpacks-deb-packages` project located in `src/install_packages.rs`. This document explains its functionality, how to add entries to it, and the implications of skipping a package. It is intended for programmers who may need to extend or maintain the codebase.
 
 ## How `PACKAGE_ENV_VARS` Works
 
