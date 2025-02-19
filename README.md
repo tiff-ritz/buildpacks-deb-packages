@@ -209,11 +209,11 @@ For each package added after [determining the packages to install](#step-2-deter
   a [Debian Archive][debian-archive].
 - Extract the contents of the `data.tar` entry from the [Debian Archive][debian-archive] into a [layer][cnb-layer]
   available at `build` and `launch`.
-- Execute any `postinst` scripts found in the
-  package to perform additional setup tasks.
+- Execute any `postinst` scripts found in the package to perform additional setup tasks into a [layer][cnb-layer]
+  available at `build` and `launch`.
 - Rewrite any [pkg-config][package-config-file] files to use a `prefix` set to the layer directory of the installed
   package.
-- Configure the following [layer environment variables][cnb-environment] and [PACKAGE_ENV_VAR][PACKAGE_ENV_VARS.md] to be available at both `build` and `launch`:
+- Configure the following [layer environment variables][cnb-environment] and [PACKAGE_ENV_VAR](PACKAGE_ENV_VARS.md) to be available at both `build` and `launch`:
 
 | Environment Variable | Appended Values                                                                                                  | Contents         |
 |----------------------|------------------------------------------------------------------------------------------------------------------|------------------|
@@ -299,7 +299,7 @@ Ensure you have the following installed:
 
 ### Building the Project
 
-`cargo build` to build the project
-`cargo test` to run the automated tests
-`cargo test --test integration_test` to run integration tests
-`cargo libcnb package` builds an image of the buildpack that can be used with an application.  The output of this command shows usage of the generated image.
+- `cargo build` to build the project
+- `cargo test` to run the automated tests
+- `cargo test --test integration_test` to run integration tests
+- `cargo libcnb package` builds an image of the buildpack that can be used with an application.  The output of this command shows usage of the generated image.
