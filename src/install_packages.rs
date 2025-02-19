@@ -479,9 +479,13 @@ fn configure_layer_environment(
 
     // Load and apply environment variables from the project.toml file
     let project_toml_path = install_path.join("project.toml");
+    println!("project_toml_path: {:?}", project_toml_path);
     if project_toml_path.exists() {
+        println!("Loading environment variables from project.toml");
         let env = Environment::load_from_toml(&project_toml_path, &install_path.to_string_lossy());
+        println!("Loaded environment variables from project.toml");
         for (key, value) in env.get_variables() {
+            println!("Adding env var: {}={:?}", key, value);
             prepend_to_env_var(&mut layer_env, key, vec![value.clone()]);
         }
     }
@@ -595,7 +599,7 @@ where
     let paths_str = paths_vec.join(separator.as_ref());
 
     // Log the environment variable being added
-    // println!("Adding env var: {}={:?}", name, paths_str);
+    println!("Adding env var: {}={:?}", name, paths_str);
 
     layer_env.insert(Scope::All, ModificationBehavior::Delimiter, name, separator);
     layer_env.insert(Scope::All, ModificationBehavior::Prepend, name, paths_str);

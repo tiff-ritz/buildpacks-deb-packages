@@ -96,7 +96,7 @@ install = [
   # curl is already on the system so we're going to force it to be installed
   { name = "curl", force = true },
   # git and ghostlib both need environment variables defined
-  { name = "git", env = {"GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates"}, commands = ["echo 'Git installed successfully'", "git --version"]},
+  { name = "git", env = {"GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates"}},
   { name = "ghostscript", env = {"GS_LIB" = "{install_dir}/var/lib/ghostscript"}},  
 ]
 ```
