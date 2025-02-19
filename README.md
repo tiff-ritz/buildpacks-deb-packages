@@ -34,6 +34,10 @@ The `PACKAGE_ENV_VARS` constant defines environment variables required by specif
 
 The `SPECIAL_CASE_MAP` constant defines special cases where additional packages should be installed before the requested package. This is useful for handling dependencies that are not automatically resolved by the package manager. For more details, see the [SPECIAL_CASE_MAP documentation](SPECIAL_CASE_MAP.md).
 
+### Post Installation Scripts
+
+During package extraction, the control.tar is examined to check for a postinst script. If one is found, its permissions are modified and it is executed.
+
 ## Usage
 
 > [!NOTE]

@@ -370,7 +370,7 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                 while let Some(entry) = entries.next().await {
                     let mut entry = entry.map_err(
                         |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
-                    let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
+                    let entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
                     if entry_path.ends_with("postinst") {
                         let mut postinst_path = output_dir.clone();
@@ -392,7 +392,7 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                 while let Some(entry) = entries.next().await {
                     let mut entry = entry.map_err(
                         |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
-                    let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
+                    let entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
                     if entry_path.ends_with("postinst") {
                         let mut postinst_path = output_dir.clone();
@@ -414,7 +414,7 @@ async fn extract(download_path: PathBuf, output_dir: PathBuf) -> BuildpackResult
                 while let Some(entry) = entries.next().await {
                     let mut entry = entry.map_err(
                         |e| InstallPackagesError::UnpackTarball(download_path.clone(), e))?;
-                    let mut entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
+                    let entry_path = entry.path().map_err(|e| InstallPackagesError::UnpackTarball(
                         download_path.clone(), e))?;
                     if entry_path.ends_with("postinst") {
                         let mut postinst_path = output_dir.clone();
@@ -451,7 +451,7 @@ async fn execute_postinst_script(postinst_path: PathBuf) -> Result<(), InstallPa
         .map_err(|e| InstallPackagesError::SetPermissions(postinst_path.clone(), e))?;
 
     // Run the postinst script
-    let output = Command::new(postinst_path)
+    let _output = Command::new(postinst_path)
         .output()
         .await
         .map_err(|e| InstallPackagesError::ExecutePostinstScript(e))?;
@@ -694,14 +694,11 @@ mod test {
     use super::*;
     use libcnb::layer_env::Scope;
     use std::ffi::OsString;
-    use std::fs::{self, File};
-    use std::io::{Cursor, Read, Write}; 
+    use std::fs::{self};
     use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
-    use std::str::FromStr;
 
     use tempfile::TempDir;
-    use tempfile::tempdir;
     use tokio::process::Command;
     use mockall::predicate::*;
 
@@ -712,11 +709,6 @@ mod test {
     use crate::debian::repository_package::RepositoryPackage;
     use crate::debian::package_name::PackageName;
     use crate::debian::RepositoryUri;
-    use crate::config::buildpack_config::BuildpackConfig;
-
-    use flate2::write::GzEncoder;
-    use flate2::read::GzDecoder;
-    use flate2::Compression;
     
     #[tokio::test]
     async fn test_execute_postinst_script() -> Result<(), InstallPackagesError> {
@@ -726,7 +718,7 @@ mod test {
     
         // Call the execute_postinst_script function
         println!("Calling execute_postinst_script function");
-        execute_postinst_script(postinst_path.clone().into()).await?;
+        execute_postinst_script(postinst_path.into()).await?;
         println!("Called execute_postinst_script function");
     
         let permissions = fs::metadata(&postinst_path)?.permissions();
@@ -743,11 +735,6 @@ mod test {
 
     #[test]
     fn configure_layer_environment_adds_nested_directories_with_shared_libraries_to_library_path() {
-        // Load the fixture project.toml file
-        let fixture_path = Path::new("tests/fixtures/unit_tests/project.toml");
-        let toml = fs::read_to_string(fixture_path).expect("Failed to read fixture project.toml");
-
-        let config = BuildpackConfig::from_str(&toml).unwrap();
 
         let arch = MultiarchName::X86_64_LINUX_GNU;
         let install_dir = create_installation(vec![

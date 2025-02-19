@@ -307,7 +307,6 @@ dependencies = [
  "bullet_stream",
  "debversion",
  "edit-distance",
- "flate2",
  "futures 0.3.31",
  "indexmap",
  "indoc",

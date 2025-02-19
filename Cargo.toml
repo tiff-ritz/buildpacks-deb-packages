@@ -15,7 +15,6 @@ bon = "3"
 bullet_stream = "0.3"
 debversion = "0.4"
 edit-distance = "2"
-flate2 = "1.0"
 futures = { version = "0.3", default-features = false, features = ["io-compat"] }
 indexmap = "2"
 libcnb = { version = "=0.26.0", features = ["trace"] }

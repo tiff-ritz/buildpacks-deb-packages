@@ -39,7 +39,6 @@ fn on_buildpack_error(error: DebianPackagesBuildpackError) -> ErrorMessage {
             on_determine_packages_to_install_error(e)
         }
         DebianPackagesBuildpackError::InstallPackages(e) => on_install_packages_error(e),
-        DebianPackagesBuildpackError::SystemTimeError(e) => on_system_time_error(e),
     }
 }
 
@@ -195,15 +194,6 @@ fn on_unsupported_distro_error(error: UnsupportedDistroError) -> ErrorMessage {
             - Ubuntu 24.04 (amd64, arm64)
             - Ubuntu 22.04 (amd64)
         " })
-        .call()
-}
-
-fn on_system_time_error(error: SystemTimeError) -> ErrorMessage {
-    create_error()
-        .error_type(Internal)
-        .header("Failed to get system time")
-        .body(format!("System time error: {}", error))
-        .debug_info(error.to_string())
         .call()
 }
 
