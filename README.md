@@ -67,6 +67,12 @@ specified there. See below for the [configuration schema](#schema) and an [examp
 ### Default Package Environment Variables
 The buildpack includes a set of default environment variables for each package, known as `PACKAGE_ENV_VARS`. These default environment variables are applied during the build process.
 
+### Configuring Environment Variables
+
+You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.
+
+During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual paths so the variables are available at both `build` and `launch` phases using [layer environment variables][cnb-environment].
+
 #### Example
 
 ```toml
@@ -89,6 +95,9 @@ install = [
   "libvips",
   # curl is already on the system so we're going to force it to be installed
   { name = "curl", force = true },
+  # git and ghostlib both need environment variables defined
+  { name = "git", env = {"GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates"}, commands = ["echo 'Git installed successfully'", "git --version"]},
+  { name = "ghostscript", env = {"GS_LIB" = "{install_dir}/var/lib/ghostscript"}},  
 ]
 ```
 
@@ -120,6 +129,10 @@ install = [
             - `force` *__([boolean][toml-boolean], optional, default = false)__*
 
               If set to `true`, the package will be installed even if it's already installed on the system.
+
+            - `env` *__([inline-table][toml-inline-table], optional, default={})__*
+
+              A table of environment variables to set for the package. The keys are the variable names and the values are the variable values. The `{build_dir}` placeholder can be used in the values and will be replaced with the actual build directory path.
 
 > [!TIP]
 > Users of the [heroku-community/apt][classic-apt-buildpack] can migrate their Aptfile to the above configuration by
@@ -227,10 +240,15 @@ For each package added after [determining the packages to install](#step-2-deter
 | `INCLUDE_PATH`       | `/<layer_dir>/usr/include/<arch>` <br> `/<layer_dir>/usr/include`                                                | header files     |
 | `CPATH`              | Same as `INCLUDE_PATH`                                                                                           | header files     |
 | `CPPPATH`            | Same as `INCLUDE_PATH`                                                                                           | header files     |
+<<<<<<< HEAD
 | `PKG_CONFIG_PATH`    | `/<layer_dir>/usr/lib/<arch>/pkgconfig` <br> `/<layer_dir>/usr/lib/pkgconfig`                                    | pc files      |
 | `GIT_EXEC_PATH`      | `/<layer_dir>/app/.apt/usr/lib/git-core`                                                                         | git files     |
 | `GIT_TEMPLATE_DIR`   | `/<layer_dir>/app/.apt/usr/share/git-core/templates`                                                             | git template files    |
 | `GS_LIB`             | `/<layer_dir>/app/.apt/var/lib/ghostscript/templates`                                                            | ghostscript library  |
+=======
+
+| `PKG_CONFIG_PATH`    | `/<layer_dir>/usr/lib/<arch>/pkgconfig` <br> `/<layer_dir>/usr/lib/pkgconfig`                                    | pc files         |
+>>>>>>> test-env
 
 ## Contributing
 

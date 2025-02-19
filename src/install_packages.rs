@@ -37,6 +37,7 @@ use tokio_util::io::InspectReader;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::config::RequestedPackage;
+use crate::config::environment::Environment;
 use crate::debian::{Distro, MultiarchName, RepositoryPackage};
 use crate::{
     is_buildpack_debug_logging_enabled, BuildpackResult, DebianPackagesBuildpack,
@@ -475,6 +476,15 @@ fn configure_layer_environment(
         install_path.join("usr/sbin"),
     ];
     prepend_to_env_var(&mut layer_env, "PATH", &bin_paths);
+
+    // Load and apply environment variables from the project.toml file
+    let project_toml_path = install_path.join("project.toml");
+    if project_toml_path.exists() {
+        let env = Environment::load_from_toml(&project_toml_path, &install_path.to_string_lossy());
+        for (key, value) in env.get_variables() {
+            prepend_to_env_var(&mut layer_env, key, vec![value.clone()]);
+        }
+    }
 
     // Support multi-arch and legacy filesystem layouts for debian packages
     let library_paths = [

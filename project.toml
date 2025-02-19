@@ -17,4 +17,5 @@ install = [
   { name = "curl", force = true },
   # git needs to have environment variables set and post installation commands run
   { name = "git", env = {"GIT_EXEC_PATH" = "{install_dir}/usr/lib/git-core", "GIT_TEMPLATE_DIR" = "{install_dir}/usr/share/git-core/templates"}, commands = ["echo 'Git installed successfully'", "git --version"]},
+  { name = "ghostscript", env = {"GS_LIB" = "{install_dir}/var/lib/ghostscript"}},
 ]
