@@ -223,8 +223,10 @@ For each package added after [determining the packages to install](#step-2-deter
 | `INCLUDE_PATH`       | `/<layer_dir>/usr/include/<arch>` <br> `/<layer_dir>/usr/include`                                                | header files     |
 | `CPATH`              | Same as `INCLUDE_PATH`                                                                                           | header files     |
 | `CPPPATH`            | Same as `INCLUDE_PATH`                                                                                           | header files     |
-| `PKG_CONFIG_PATH`    | `/<layer_dir>/usr/lib/<arch>/pkgconfig` <br> `/<layer_dir>/usr/lib/pkgconfig`                                    | pc files         |
-| `GIT_EXEC_PATH`    | `/<layer_dir>/app/.apt/usr/lib/git-core`                                    | git files         |
+| `PKG_CONFIG_PATH`    | `/<layer_dir>/usr/lib/<arch>/pkgconfig` <br> `/<layer_dir>/usr/lib/pkgconfig`                                    | pc files      |
+| `GIT_EXEC_PATH`      | `/<layer_dir>/app/.apt/usr/lib/git-core`                                                                         | git files     |
+| `GIT_TEMPLATE_DIR`   | `/<layer_dir>/app/.apt/usr/share/git-core/templates`                                                             | git template files    |
+| `GS_LIB`             | `/<layer_dir>/app/.apt/var/lib/ghostscript/templates`                                                            | ghostscript library  |
 
 ## Contributing
 
