@@ -185,13 +185,18 @@ pub(crate) async fn install_packages(
         })
         .collect();    
 
-   // Define layer_env before using it
-   let layer_env = configure_layer_environment(
+    // go ahead and read/load the project.toml file
+    let env_file_path = context.app_dir.join("project.toml");
+    let env = Environment::load_from_toml(&env_file_path, &install_layer.path().to_string_lossy());
+
+    // Define layer_env before using it
+    let layer_env = configure_layer_environment(
         &install_layer.path(),
         &MultiarchName::from(&distro.architecture),
         &package_env_vars,
         &packages_to_install,
         &skipped_packages,
+        &env,
     );
 
     install_layer.write_env(layer_env)?;
@@ -466,6 +471,7 @@ fn configure_layer_environment(
     package_env_vars: &HashMap<String, HashMap<String, String>>,
     packages_to_install: &[RepositoryPackage],
     skipped_packages: &[RequestedPackage],
+    env: &Environment,
 ) -> LayerEnv {
 
     let mut layer_env = LayerEnv::new();
@@ -478,16 +484,8 @@ fn configure_layer_environment(
     prepend_to_env_var(&mut layer_env, "PATH", &bin_paths);
 
     // Load and apply environment variables from the project.toml file
-    let project_toml_path = install_path.join("project.toml");
-    println!("project_toml_path: {:?}", project_toml_path);
-    if project_toml_path.exists() {
-        println!("Loading environment variables from project.toml");
-        let env = Environment::load_from_toml(&project_toml_path, &install_path.to_string_lossy());
-        println!("Loaded environment variables from project.toml");
-        for (key, value) in env.get_variables() {
-            println!("Adding env var: {}={:?}", key, value);
-            prepend_to_env_var(&mut layer_env, key, vec![value.clone()]);
-        }
+    for (key, value) in env.get_variables() {
+        prepend_to_env_var(&mut layer_env, key, vec![value.clone()]);
     }
 
     // Support multi-arch and legacy filesystem layouts for debian packages
@@ -599,7 +597,7 @@ where
     let paths_str = paths_vec.join(separator.as_ref());
 
     // Log the environment variable being added
-    println!("Adding env var: {}={:?}", name, paths_str);
+    // println!("Adding env var: {}={:?}", name, paths_str);
 
     layer_env.insert(Scope::All, ModificationBehavior::Delimiter, name, separator);
     layer_env.insert(Scope::All, ModificationBehavior::Prepend, name, paths_str);
