@@ -1156,6 +1156,8 @@ mod test {
         let libportaudio2 = create_repository_package().name("libportaudio2").call();
         let zip = create_repository_package().name("7zip").call();
         let zip_standalone = create_repository_package().name("7zip-standalone").call();
+        let enchant2 = create_repository_package().name("enchant-2").call();
+        let libenchant2_dev = create_repository_package().name("libenchant-2-dev").call();
 
         let (new_packages_marked_for_install, package_notifications) = test_install_state()
             .with_package_index(vec![
@@ -1163,6 +1165,8 @@ mod test {
                 &libportaudio2,
                 &zip,
                 &zip_standalone,
+                &enchant2,
+                &libenchant2_dev,
             ])
             .install("portaudio19-dev")
             .call()
@@ -1204,6 +1208,8 @@ mod test {
                 &libportaudio2,
                 &zip,
                 &zip_standalone,
+                &enchant2,
+                &libenchant2_dev,
             ])
             .install("7zip")
             .call()
@@ -1238,6 +1244,49 @@ mod test {
                 },
             ])
         );
+
+        let (new_packages_marked_for_install, package_notifications) = test_install_state()
+            .with_package_index(vec![
+                &portaudio19_dev,
+                &libportaudio2,
+                &zip,
+                &zip_standalone,
+                &enchant2,
+                &libenchant2_dev,
+            ])
+            .install("enchant-2")
+            .call()
+            .unwrap();
+
+        assert_eq!(
+            new_packages_marked_for_install,
+            IndexSet::from([
+                create_package_marked_for_install()
+                    .repository_package(&libenchant2_dev)
+                    .requested_by("libenchant-2-dev")
+                    .call(),
+                create_package_marked_for_install()
+                    .repository_package(&enchant2)
+                    .requested_by("enchant-2")
+                    .call(),
+            ])
+        );
+
+        assert_eq!(
+            package_notifications,
+            IndexSet::from([
+                PackageNotification::Added {
+                    repository_package: libenchant2_dev.clone(),
+                    dependency_path: vec![],
+                    forced_install: false,
+                },
+                PackageNotification::Added {
+                    repository_package: enchant2.clone(),
+                    dependency_path: vec![],
+                    forced_install: false,
+                },
+            ])
+        );        
     }    
 
     #[builder]

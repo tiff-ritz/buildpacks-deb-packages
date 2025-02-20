@@ -845,6 +845,10 @@ mod test {
             applied_env.get("GS_LIB"),
             Some(&OsString::from(format!("{}/var/lib/ghostscript", install_dir_str)))
         );
+        assert_eq!(
+            applied_env.get("UNIT_TEST"),
+            Some(&OsString::from(format!("{}/some/path/to/something", install_dir_str)))
+        );        
     }    
 
     #[test]

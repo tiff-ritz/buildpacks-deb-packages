@@ -6,6 +6,6 @@ install = [
   "portaudio19-dev",
   "7zip",
   "enchant-2",
-  { name = "git", env = {"UNIT_TEST" = "{install_dir}/usr/lib/git-core"}},
+  { name = "git", env = {"UNIT_TEST" = "{install_dir}/some/path/to/something"}},
   "nmap",
 ]
