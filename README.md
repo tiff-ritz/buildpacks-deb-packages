@@ -28,11 +28,11 @@ This buildpack is compatible with the following environments:
 
 ### PACKAGE_ENV_VARS
 
-The `PACKAGE_ENV_VARS` constant defines environment variables required by specific packages. When a package is installed, its associated environment variables are set to ensure the package functions correctly. For more details, see the [PACKAGE_ENV_VARS documentation](PACKAGE_ENV_VARS.md).
+The `PACKAGE_ENV_VARS` constant defines environment variables required by specific packages. When a package is installed, its associated environment variables are set to ensure the package functions correctly. For more details, see the [default package environment variable documentation](PACKAGE_ENV_VARS.md).
 
 ### Configuring Environment Variables
 
-You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.  For more details, see the [CONFIGURE_ENV_VAR documentation](CONFIGURE_ENV_VAR.md).
+You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.  For more details, see the [configurable package environment variable documentation](CONFIGURE_ENV_VAR.md).
 
 > [!NOTE]
 > Regardless of where the environment variable is defined, the `{install_dir}` placeholder will be 
@@ -41,7 +41,7 @@ You can configure environment variables for the packages installed by this build
 
 ### SPECIAL_CASE_MAP
 
-The `SPECIAL_CASE_MAP` constant defines special cases where additional packages should be installed before the requested package. This is useful for handling dependencies that are not automatically resolved by the package manager. For more details, see the [SPECIAL_CASE_MAP documentation](SPECIAL_CASE_MAP.md).
+The `SPECIAL_CASE_MAP` constant defines special cases where additional packages should be installed before the requested package. This is useful for handling dependencies that are not automatically resolved by the package manager. For more details, see the [special case documentation](SPECIAL_CASE_MAP.md).
 
 ### Post Installation Scripts
 
@@ -242,15 +242,10 @@ For each package added after [determining the packages to install](#step-2-deter
 | `INCLUDE_PATH`       | `/<layer_dir>/usr/include/<arch>` <br> `/<layer_dir>/usr/include`                                                | header files     |
 | `CPATH`              | Same as `INCLUDE_PATH`                                                                                           | header files     |
 | `CPPPATH`            | Same as `INCLUDE_PATH`                                                                                           | header files     |
-<<<<<<< HEAD
 | `PKG_CONFIG_PATH`    | `/<layer_dir>/usr/lib/<arch>/pkgconfig` <br> `/<layer_dir>/usr/lib/pkgconfig`                                    | pc files      |
 | `GIT_EXEC_PATH`      | `/<layer_dir>/app/.apt/usr/lib/git-core`                                                                         | git files     |
 | `GIT_TEMPLATE_DIR`   | `/<layer_dir>/app/.apt/usr/share/git-core/templates`                                                             | git template files    |
 | `GS_LIB`             | `/<layer_dir>/app/.apt/var/lib/ghostscript/templates`                                                            | ghostscript library  |
-=======
-
-| `PKG_CONFIG_PATH`    | `/<layer_dir>/usr/lib/<arch>/pkgconfig` <br> `/<layer_dir>/usr/lib/pkgconfig`                                    | pc files         |
->>>>>>> test-env
 
 ## Contributing
 
@@ -310,20 +305,3 @@ Issues and pull requests are welcome. See our [contributing guidelines](./CONTRI
 
 [toml-table]: https://toml.io/en/v1.0.0#table
 
-## Testing Locally
-
-To test the project locally, follow these steps:
-
-### Prerequisites
-
-Ensure you have the following installed:
-- Rust and Cargo: [Installation Guide](https://www.rust-lang.org/tools/install)
-- Docker (if applicable for your tests)
-- `cargo install libcnb-cargo`
-
-### Building the Project
-
-- `cargo build` to build the project
-- `cargo test` to run the automated tests
-- `cargo test --test integration_test` to run integration tests
-- `cargo libcnb package` builds an image of the buildpack that can be used with an application.  The output of this command shows usage of the generated image.

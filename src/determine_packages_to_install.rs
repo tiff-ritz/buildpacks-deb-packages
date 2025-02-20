@@ -17,6 +17,7 @@ use std::time::SystemTimeError;
 const SPECIAL_CASE_MAP: &[(&str, &[&str])] = &[
     ("portaudio19-dev", &["libportaudio2"]),
     ("7zip", &["7zip-standalone"]),
+    ("enchant-2", &["libenchant-2-dev"])
 ];
 
 pub(crate) fn determine_packages_to_install(

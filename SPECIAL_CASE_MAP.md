@@ -14,6 +14,7 @@ The `SPECIAL_CASE_MAP` constant is defined as a slice of tuples, where each tupl
 const SPECIAL_CASE_MAP: &[(&str, &[&str])] = &[
     ("portaudio19-dev", &["libportaudio2"]),
     ("7zip", &["7zip-standalone"]),
+    ("enchant-2", &["libenchant-2-dev"]),
     // add more mappings here
 ];
 ```
