@@ -760,11 +760,13 @@ mod test {
         ]);
         let install_path = install_dir.path();
 
-        // Convert package_env_vars to the correct type and replace {install_dir} with the actual path
+        // Load environment variables from project.toml
+        let project_toml_path = "tests/fixtures/unit_tests/project.toml";
         let install_dir_str = install_path.to_string_lossy().to_string();
+        let env = Environment::load_from_toml(Path::new(project_toml_path), &install_dir_str);
 
+        // Convert package_env_vars to the correct type and replace {install_dir} with the actual path
         let initial_package_env_vars = package_env_vars();
-
         let package_env_vars: HashMap<String, HashMap<String, String>> = initial_package_env_vars
             .into_iter()
             .map(|(k, v)| {
@@ -808,6 +810,7 @@ mod test {
             &package_env_vars,
             &packages_to_install,
             &skipped_packages,
+            &env,
         );        
 
         // Get the actual and expected values for LD_LIBRARY_PATH
@@ -856,10 +859,13 @@ mod test {
         ]);
         let install_path = install_dir.path();
 
-        // Convert package_env_vars to the correct type and replace {install_dir} with the actual path
+        // Load environment variables from project.toml
+        let project_toml_path = "tests/fixtures/unit_tests/project.toml";
         let install_dir_str = install_path.to_string_lossy().to_string();
-        let initial_package_env_vars = package_env_vars();
+        let env = Environment::load_from_toml(Path::new(project_toml_path), &install_dir_str);
 
+        // Convert package_env_vars to the correct type and replace {install_dir} with the actual path
+        let initial_package_env_vars = package_env_vars();
         let package_env_vars: HashMap<String, HashMap<String, String>> = initial_package_env_vars
             .into_iter()
             .map(|(k, v)| {
@@ -896,6 +902,7 @@ mod test {
             &package_env_vars,
             &packages_to_install,
             &skipped_packages,
+            &env,
         );
 
         assert_eq!(
