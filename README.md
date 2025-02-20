@@ -30,6 +30,15 @@ This buildpack is compatible with the following environments:
 
 The `PACKAGE_ENV_VARS` constant defines environment variables required by specific packages. When a package is installed, its associated environment variables are set to ensure the package functions correctly. For more details, see the [PACKAGE_ENV_VARS documentation](PACKAGE_ENV_VARS.md).
 
+### Configuring Environment Variables
+
+You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.  For more details, see the [CONFIGURE_ENV_VAR documentation](CONFIGURE_ENV_VAR.md).
+
+> [!NOTE]
+> Regardless of where the environment variable is defined, the `{install_dir}` placeholder will be 
+> replaced with the actual paths so the variables are available at both `build` and `launch` phases
+> using [layer environment variables][cnb-environment].
+
 ### SPECIAL_CASE_MAP
 
 The `SPECIAL_CASE_MAP` constant defines special cases where additional packages should be installed before the requested package. This is useful for handling dependencies that are not automatically resolved by the package manager. For more details, see the [SPECIAL_CASE_MAP documentation](SPECIAL_CASE_MAP.md).
@@ -64,14 +73,7 @@ The configuration for this buildpack must be added to the project descriptor fil
 project using the `com.heroku.buildpacks.deb-packages` table. The list of packages to install must be
 specified there. See below for the [configuration schema](#schema) and an [example](#example).
 
-### Default Package Environment Variables
-The buildpack includes a set of default environment variables for each package, known as `PACKAGE_ENV_VARS`. These default environment variables are applied during the build process.
-
-### Configuring Environment Variables
-
 You can configure environment variables for the packages installed by this buildpack by defining them in the `project.toml` file. The environment variables are specified under the `env` key for each package.
-
-During the build process, the buildpack will read the `project.toml` file and apply the specified environment variables. The `{install_dir}` placeholder will be replaced with the actual paths so the variables are available at both `build` and `launch` phases using [layer environment variables][cnb-environment].
 
 #### Example
 
