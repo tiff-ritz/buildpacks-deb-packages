@@ -7,7 +7,7 @@ use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
+use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH, Duration};
 
 use ar::Archive as ArArchive;
 use async_compression::tokio::bufread::{GzipDecoder, XzDecoder, ZstdDecoder};
@@ -17,6 +17,7 @@ use futures::StreamExt;
 use futures::io::AllowStdIo;
 use futures::TryStreamExt;
 use indexmap::IndexSet;
+use libcnb::Env;
 use libcnb::build::BuildContext;
 use libcnb::data::layer_name;
 use libcnb::layer::{
@@ -36,11 +37,12 @@ use tokio_util::compat::FuturesAsyncReadCompatExt;
 use tokio_util::io::InspectReader;
 use walkdir::{DirEntry, WalkDir};
 
+// use crate::main::get_cache_retention_days;
 use crate::config::RequestedPackage;
 use crate::config::environment::Environment;
 use crate::debian::{Distro, MultiarchName, RepositoryPackage};
 use crate::{
-    is_buildpack_debug_logging_enabled, BuildpackResult, DebianPackagesBuildpack,
+    is_buildpack_debug_logging_enabled, get_package_cache_days, BuildpackResult, DebianPackagesBuildpack,
     DebianPackagesBuildpackError,
 };
 
@@ -98,12 +100,19 @@ pub(crate) async fn install_packages(
             launch: true,
             invalid_metadata_action: &|_| InvalidMetadataAction::DeleteLayer,
             restored_layer_action: &|old_metadata: &InstallationMetadata, _| {
-                if old_metadata == &new_metadata {
-                    //RestoredLayerAction::KeepLayer
-                    RestoredLayerAction::DeleteLayer
+                let now = SystemTime::now();
+                let old_timestamp = UNIX_EPOCH + Duration::from_secs(old_metadata.timestamp);
+                let duration = now.duration_since(old_timestamp).unwrap_or(Duration::new(0, 0));
+                let x_days = get_package_cache_days(); // Default to 7 days if the environment variable is not set
+                println!("Cache retention days: {}", x_days);
+    
+                if x_days > 0 && duration <= Duration::from_secs(x_days * 24 * 60 * 60) && old_metadata == &new_metadata {
+                    println!("Restoring layer: duration is less than or equal to {} days and metadata matches", x_days);
+                    RestoredLayerAction::KeepLayer
                 } else {
+                    println!("Deleting layer: x_days = 0; duration is less than or equal to {} days and metadata matches", x_days);
                     RestoredLayerAction::DeleteLayer
-                }
+                }                
             },
         },
     )?;
@@ -705,6 +714,7 @@ struct InstallationMetadata {
 mod test {
     use super::*;
     use libcnb::layer_env::Scope;
+    use std::env;
     use std::ffi::OsString;
     use std::fs::{self};
     use std::os::unix::fs::PermissionsExt;
@@ -921,6 +931,24 @@ mod test {
         );
     }    
 
+    #[test]
+    fn test_get_package_cache_days() {
+        // use std::env to insert the variable into the process environment
+
+        env::set_var("PACKAGE_CACHE_DAYS", "10");
+        assert_eq!(get_package_cache_days(), 10);
+        env::set_var("PACKAGE_CACHE_DAYS", "0");
+        assert_eq!(get_package_cache_days(), 0);
+
+        // Test when the environment variable is set to an invalid number
+        env::set_var("PACKAGE_CACHE_DAYS", "invalid");
+        assert_eq!(get_package_cache_days(), 7);
+
+        // Test when the environment variable is not set
+        env::remove_var("PACKAGE_CACHE_DAYS");
+        assert_eq!(get_package_cache_days(), 7);        
+    }
+    
     fn create_installation(files: Vec<String>) -> TempDir {
         let install_dir = tempfile::tempdir().unwrap();
         for file in files {
@@ -945,5 +973,5 @@ mod test {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default()
-    }
+    }    
 }

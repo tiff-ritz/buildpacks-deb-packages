@@ -172,3 +172,10 @@ pub(crate) fn is_buildpack_debug_logging_enabled() -> bool {
         .get("BP_LOG_LEVEL")
         .is_some_and(|value| value.to_ascii_lowercase() == "debug")
 }
+
+pub(crate) fn get_package_cache_days() -> u64 {
+    Env::from_current()
+        .get("PACKAGE_CACHE_DAYS")
+        .and_then(|value| value.to_str().and_then(|s| s.parse::<u64>().ok()))
+        .unwrap_or(7)
+}
