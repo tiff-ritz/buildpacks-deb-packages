@@ -17,7 +17,8 @@ use std::time::SystemTimeError;
 const SPECIAL_CASE_MAP: &[(&str, &[&str])] = &[
     ("portaudio19-dev", &["libportaudio2"]),
     ("7zip", &["7zip-standalone"]),
-    ("enchant-2", &["libenchant-2-dev"])
+    ("enchant-2", &["libenchant-2-dev"]),
+    ("hunspell", &["libhunspell-dev", "libncurses5-dev", "libreadline-dev"]),
 ];
 
 pub(crate) fn determine_packages_to_install(
@@ -1152,12 +1153,17 @@ mod test {
 
     #[test]
     fn install_special_case_package_with_additional_packages() {
+
         let portaudio19_dev = create_repository_package().name("portaudio19-dev").call();
         let libportaudio2 = create_repository_package().name("libportaudio2").call();
         let zip = create_repository_package().name("7zip").call();
         let zip_standalone = create_repository_package().name("7zip-standalone").call();
         let enchant2 = create_repository_package().name("enchant-2").call();
         let libenchant2_dev = create_repository_package().name("libenchant-2-dev").call();
+        let hunspell = create_repository_package().name("hunspell").call();
+        let libhunspell_dev = create_repository_package().name("libhunspell-dev").call();
+        let libncurses5_dev = create_repository_package().name("libncurses5-dev").call();
+        let libreadline_dev = create_repository_package().name("libreadline-dev").call();
 
         let (new_packages_marked_for_install, package_notifications) = test_install_state()
             .with_package_index(vec![
@@ -1167,6 +1173,11 @@ mod test {
                 &zip_standalone,
                 &enchant2,
                 &libenchant2_dev,
+                &hunspell,
+                &libhunspell_dev,
+                &libncurses5_dev,
+                &libreadline_dev,
+
             ])
             .install("portaudio19-dev")
             .call()
@@ -1210,6 +1221,10 @@ mod test {
                 &zip_standalone,
                 &enchant2,
                 &libenchant2_dev,
+                &hunspell,
+                &libhunspell_dev,
+                &libncurses5_dev,
+                &libreadline_dev,
             ])
             .install("7zip")
             .call()
@@ -1253,6 +1268,10 @@ mod test {
                 &zip_standalone,
                 &enchant2,
                 &libenchant2_dev,
+                &hunspell,
+                &libhunspell_dev,
+                &libncurses5_dev,
+                &libreadline_dev,
             ])
             .install("enchant-2")
             .call()
@@ -1287,6 +1306,71 @@ mod test {
                 },
             ])
         );        
+
+        let (new_packages_marked_for_install, package_notifications) = test_install_state()
+            .with_package_index(vec![
+                &portaudio19_dev,
+                &libportaudio2,
+                &zip,
+                &zip_standalone,
+                &enchant2,
+                &libenchant2_dev,
+                &hunspell,
+                &libhunspell_dev,
+                &libncurses5_dev,
+                &libreadline_dev,
+            ])
+            .install("hunspell")
+            .call()
+            .unwrap();
+
+        assert_eq!(
+            new_packages_marked_for_install,
+            IndexSet::from([
+                create_package_marked_for_install()
+                    .repository_package(&libhunspell_dev)
+                    .requested_by("libhunspell-dev")
+                    .call(),
+                create_package_marked_for_install()
+                    .repository_package(&libncurses5_dev)
+                    .requested_by("libncurses5-dev")
+                    .call(),
+                create_package_marked_for_install()
+                    .repository_package(&libreadline_dev)
+                    .requested_by("libreadline-dev")
+                    .call(),
+                create_package_marked_for_install()
+                    .repository_package(&hunspell)
+                    .requested_by("hunspell")
+                    .call(),
+            ])
+        );
+
+        assert_eq!(
+            package_notifications,
+            IndexSet::from([
+                PackageNotification::Added {
+                    repository_package: libhunspell_dev.clone(),
+                    dependency_path: vec![],
+                    forced_install: false,
+                },
+                PackageNotification::Added {
+                    repository_package: libncurses5_dev.clone(),
+                    dependency_path: vec![],
+                    forced_install: false,
+                },
+                PackageNotification::Added {
+                    repository_package: libreadline_dev.clone(),
+                    dependency_path: vec![],
+                    forced_install: false,
+                },
+                PackageNotification::Added {
+                    repository_package: hunspell.clone(),
+                    dependency_path: vec![],
+                    forced_install: false,
+                },
+            ])
+        );                
     }    
 
     #[builder]

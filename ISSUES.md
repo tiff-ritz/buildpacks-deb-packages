@@ -20,6 +20,5 @@
 
 [Any way to purge apt-get packages?](https://github.com/heroku/heroku-buildpack-apt/issues/50) - PACKAGE_CACHE_DAYS = 0
 
-Can be solved:
 [Getting libhunspell-dev](https://github.com/heroku/heroku-buildpack-apt/issues/7) - by adding to the special case.  Need to verify that `libhunspell-dev` is the only library needed.
 
