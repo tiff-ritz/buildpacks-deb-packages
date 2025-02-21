@@ -43,6 +43,10 @@ You can configure environment variables for the packages installed by this build
 
 The `SPECIAL_CASE_MAP` constant defines special cases where additional packages should be installed before the requested package. This is useful for handling dependencies that are not automatically resolved by the package manager. For more details, see the [special case documentation](SPECIAL_CASE_MAP.md).
 
+### PACKAGE_CACHE_DAYS
+
+The `PACKAGE_CACHE_DAYS` environment variable defines the number of days for which package cache is considered valid. This helps control how frequently the package cache is refreshed to ensure the most up-to-date packages are used.  For more details, see the [PACKAGE_CACHE_DAYS environment variable documentation](PACKAGE_CACHE_DAYS.md)
+
 ### Post Installation Scripts
 
 During package extraction, the control.tar is examined to check for a postinst script. If one is found, its permissions are modified and it is executed.
@@ -163,6 +167,7 @@ The following environment variables can be passed to the buildpack:
 | Name           | Value               | Default | Description                                                                                        |
 |----------------|---------------------|---------|----------------------------------------------------------------------------------------------------|
 | `BP_LOG_LEVEL` | `INFO`,<br> `DEBUG` | `INFO`  | Configures the verbosity of buildpack output. The `DEBUG` level is a superset of the `INFO` level. |
+| `PACKAGE_CACHE_DAYS` | `0`,<br> number | `7` | Configures the number of days to keep the package cache. | 
 
 ## How it works
 
